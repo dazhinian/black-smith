@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="Pm592Mtg2O2gHA18UPOF0i">
+<head data-page-node-id="U4NAOSicbJCTTw1UjWimms">
+<meta charset="utf-8" data-page-node-id="QGuEfY4S5v23nKCzGfRyC8">
+<meta name="viewport" content="width=device-width,initial-scale=1" data-page-node-id="JVRVXp1wa5zKw2FHJjWTfV">
+<title>打铁形变原型 · 边本构 + 局部体积守恒</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;background:#e9ebef;color:#1d2129;overflow:hidden}
+  #app{display:flex;height:100%;width:100%}
+  #stage{flex:1;position:relative;min-width:0;background:#0e1013}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:absolute;left:12px;top:12px;padding:10px 13px;background:rgba(16,18,22,.72);color:#dfe4ec;
+       border:1px solid rgba(255,255,255,.10);border-radius:8px;font:12px/1.7 ui-monospace,Consolas,monospace;
+       pointer-events:none;backdrop-filter:blur(6px);min-width:248px}
+  #hud b{color:#ffb257;font-weight:600}
+  #hud .warn{color:#ff6b5e}
+  #tip{position:absolute;left:12px;bottom:12px;padding:7px 11px;background:rgba(16,18,22,.66);color:#98a2b2;
+       border-radius:6px;font:11px/1.6 ui-monospace,Consolas,monospace;pointer-events:none}
+  #panel{width:326px;flex:0 0 326px;background:#f4f5f7;border-left:1px solid #d6dae1;overflow-y:auto;padding:12px 14px 40px}
+  #panel h1{font-size:14px;font-weight:700;margin-bottom:2px}
+  #panel .sub{font-size:11px;color:#7b8494;margin-bottom:12px;line-height:1.55}
+  details{border:1px solid #dde1e7;border-radius:7px;margin-bottom:8px;background:#fff;overflow:hidden}
+  summary{padding:8px 11px;font-size:12.5px;font-weight:600;cursor:pointer;user-select:none;background:#fafbfc;list-style:none}
+  summary::-webkit-details-marker{display:none}
+  summary:before{content:"\25B8 ";color:#8a93a3}
+  details[open] summary:before{content:"\25BE ";color:#4b5563}
+  .body{padding:9px 11px 11px}
+  .row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .row label{flex:0 0 116px;font-size:11.5px;color:#4b5563}
+  .row input[type=range]{flex:1;min-width:0;height:16px;accent-color:#c8622a}
+  .row .val{flex:0 0 54px;text-align:right;font:11px ui-monospace,Consolas,monospace;color:#1d2129}
+  .row select{flex:1;font-size:11.5px;padding:2px 4px}
+  .chk{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#4b5563;margin-bottom:6px;cursor:pointer}
+  .chk input{accent-color:#c8622a}
+  .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+  button{flex:1;min-width:60px;padding:6px 8px;font-size:11.5px;border:1px solid #cdd3dc;background:#fff;
+         border-radius:5px;cursor:pointer;color:#1d2129}
+  button:hover{background:#eef1f5;border-color:#b6bec9}
+  button.pri{background:#c8622a;border-color:#b0561f;color:#fff;font-weight:600}
+  button.pri:hover{background:#b0561f}
+  .note{font-size:10.5px;color:#8a93a3;line-height:1.65;margin-top:8px;border-top:1px dashed #e3e7ec;padding-top:7px}
+  .legend{height:9px;border-radius:3px;margin:6px 0 2px;
+          background:linear-gradient(90deg,#17171a,#4a1405,#b83500,#ff7a1a,#ffc861,#fff1c6)}
+  .legendlbl{display:flex;justify-content:space-between;font:10px ui-monospace,monospace;color:#8a93a3}
+  #err{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:#ff8a7a;
+       font-size:14px;text-align:center;padding:40px}
+</style>
+</head>
+<body data-page-node-id="z1O6m9ANOKVrnxL4XTNLMN">
+<div id="app" data-page-node-id="SZ9hfzJ4uFctGrpjQfcI9d">
+  <div id="stage" data-page-node-id="gEHtwado0UbW0vvxfrfPiL">
+    <canvas id="gl" data-page-node-id="EDVw1PvnCAXTCOamVzI1vu"></canvas>
+    <div id="hud" data-page-node-id="GotEj3FnAMxHMv3j29AhIH"></div>
+    <div id="tip" data-page-node-id="KDIkbpZKIlNYw95hCdDOSc">左键拖=旋转 · 滚轮=缩放 · 右键/Shift拖=平移 · 点击工件=移动锤头 · 空格=锤击 · R=重置 · Q=淬火 · F=加热</div>
+    <div id="err" data-page-node-id="x8zZ4g4dxVKq3Mx3WNOH15"></div>
+  </div>
+  <div id="panel" data-page-node-id="x17oWCV92HCDaBfcNmcsZp">
+    <h1 data-page-node-id="VonuO53gPVEHHOqqz6kwNV">打铁形变原型 v1</h1>
+    <div class="sub" data-page-node-id="nHdG0sBRBPb7YoAHz57BdX">判断层：边上存 L₀ / L<sub data-page-node-id="y92act1g9YxwAYgvUQd2Ro">p</sub> / α / D / σ<br data-page-node-id="NgK8q6KOWwA7rDdWqdFwlj">几何层：材料点位置 + 逐点体积守恒投影</div>
+    <div id="controls" data-page-node-id="a9SI30EKkXFQTpiwJqbxbg"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ==========================================================================
+   0. 数学工具
+   ========================================================================== */
+const clamp=(x,a,b)=>x<a?a:(x>b?b:x);
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smoothstep=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
+/* 平滑 min：w→0 退化为严格 min；全程可导、无分支（屈服面的正则化） */
+function smin(a,b,w){const m=Math.min(a,b);return m-w*Math.log1p(Math.exp(-Math.abs(a-b)/w));}
+/* softplus：塑性流动的单边激活 */
+function splus(x,w){if(x<=0)return w*Math.log1p(Math.exp(x/w));if(x/w>30)return x;return x+w*Math.log1p(Math.exp(-x/w));}
+
+/* ==========================================================================
+   1. 物理常数与参数
+   ========================================================================== */
+const TREF=1150;          /* 参考温度 °C（初始态），热膨胀以此为基准 */
+const ALPH_TH=1.4e-5;     /* 线膨胀系数 1/K */
+const BETA_TR=0.005;      /* 马氏体相变线膨胀 0.5% */
+const MS_T=330,MS_W=130;  /* Ms 点与转变区间 */
+const AUS_T=850;          /* 奥氏体化温度 */
+const RHOC=4.68e-3;       /* ρ·c  J/(mm³·K) */
+const SB=5.67e-14;        /* Stefan-Boltzmann W/(mm²·K⁴) */
+const EMISS=0.72;
+const ALPH_DIF=6.0;       /* 热扩散率 mm²/s */
+
+const CFG={
+  /* 网格精细度。实测（无 GPU 环境，纯 CPU JS）：
+       18×5×6 =   540 点 /  5138 边 /  340 胞 → 锤击 7.9 ms/帧
+       26×7×8 =  1456 点 / 15156 边 / 1050 胞 → 锤击 22.1 ms/帧  ← 默认
+       34×9×10=  3060 点 / 33470 边 / 2376 胞 → 锤击 51.9 ms/帧
+     体积守恒与分辨率无关（各档都是 -0.06% 左右），所以纯粹是精度换性能。
+     26×7×8 是拐点：再往上锤击就掉到 20fps 以下，只适合静态观察。      */
+  nx:26,ny:7,nz:8, Lx:120,Ly:24,Lz:30, T0:1150,
+  E0:210000, sy0:400, H0:600, duct:0.12,
+  hW:26, hD:52, depth:3.0, tilt:0, timeScale:0.5, retractDur:0.06,
+  /* 动力学锤：锤头有质量与初速，材料抗力逐子步给它减速。
+     以前是「运动学锤」——lerp 硬走到 top-depth，接触面无条件位置投影，
+     材料没有任何话语权：冷钢 σy=400MPa 真实手锤只会弹开留印子，
+     模型里却照压 3mm → 冷脆开裂、表面全是死胞挤出来的不规则坑。
+     现在透入深度从材料抗力中浮现：热（σy≈30MPa）→ 深痕，
+     冷（σy≈400MPa）→ 锤弹开几乎没印 —— 温度终于真正决定可锻性。
+     depth 只作最大行程上限（防高速穿透），不再是目标深度。          */
+  hMass:22, hSpeed:5, hVMax:25,
+  furnaceOn:false, furnaceT:1200, furnaceRate:0.55, coolScale:0.8, heatMult:1,
+  /* 砧面导热：真实铁砧是室温的巨大热沉，贴砧那层温度被迅速抽走 —— 这就是
+     为什么要不停翻面、为什么料底会形成冷硬层、为什么底面比顶面容易先裂。
+     以前砧面完全不参与热传导，料的温度场上下对称（真实是下冷上热）。
+     anvilH 是接触换热系数 W/(mm²·K)：静置时接触压力只有自重 ≈3 kW/(m²K)；
+     锤击瞬间压力剧增，放大 anvilHammer 倍 → ≈45 kW/(m²K)，热锻实测量级。
+     砧有热容（100kg 钢砧 ≈4.6e4 J/K）：连续锻造会把它烤热、激冷随之减弱，
+     停手后按 anvilUA 慢慢回落到环境温度 —— 真实铁砧就是这么个脾气。   */
+  anvilCool:1, anvilH:0.0008, anvilHammer:6, anvilC:4.6e4, anvilUA:5, anvilT0:25,
+  /* 约束因子 c(h/2a)：平冲头压下去，摩擦死区从顶面和底面各沿 45° 往里长。
+     h/(2a) 大（厚件）→ 两死区中间还有自由流动区，c≈3，就是经典的「平冲头
+     压半无限体」解；h/(2a) 小（薄件）→ 死区叠满整个截面，c 升到 6~8。
+     以前 c 恒为 3，等于假设底面在无穷远 —— 料被打薄之后照样好打，真实锻造
+     「越薄越难打、薄了就得回炉」的节奏完全没有。
+     默认 h=24、2a=min(hW,hD)=26 → h/(2a)=0.92，c≈5.8：默认配置本来就踩在
+     死区叠加区里，之前一直是低估的。                                      */
+  cThick:1, cMax:8, cHi:1.0, cLo:0.15,
+  /* 摩擦 hill：砧面摩擦进入锤力（见 §4.5 注释）。cFricK = 2/3 是圆柱镦粗的
+     经典系数；料越扁、展得越宽，这项越大。                                */
+  cFric:1, cFricK:0.67,
+  /* 有限砧面：真实铁砧的砧面就那么大（常见 ~100mm），料伸出砧边的部分没有
+     支撑 —— 锤打在悬出端会把料压弯，在砧边可以「剁」断，都是真实锻造的常用
+     手法。以前砧面是无限大平面，料伸多远都平贴着，锤永远打不弯它。
+     注意：悬出端不会自己下垂，因为模型里没有重力（真实锻造中重力 ≈216N，
+     相对锤力 150kN 差三个数量级，本来就该忽略）。有限砧面的作用是「打在
+     悬出端时材料能真的被压下去」。anvilFinite=0 退回无限平面，等效旧行为。 */
+  anvilFinite:0, anvilW:100, anvilD:100,
+  /* 每帧迭代。实测（26×7×8，压深 3mm 单锤）：
+       iters  12 → 展宽 5.47mm，14.0 ms/帧
+       iters  26 → 展宽 5.59mm，20.5 ms/帧
+     只差 2% 变形量，却省 32% 时间。而剧烈场景（压深 8mm × 25 锤）反而 iters
+     越低质量越好（棘轮比 3.4 vs 4.3）——过迭代会把每个子步的数值噪声吃成塑性
+     应变。所以 26 是严重过度迭代，12 是拐点。                            */
+  iters:12, alpha:0.8, beta:0.9, restart:24, volRelax:0.5,
+  fricAnvil:0.55, fricHammer:0.45, gamma:150, creep:0.05, maxdEp:0.02, vmax:0.35, heal:0.35,
+  /* spallDrop：12 条边里断几条才算「彻底粉化、脱落飞走」。默认 13 = 永不脱落
+     （任何胞都留在原位继续渲染），因为一旦让它退出体积约束，体积又会像以前
+     一样单调缩小 —— 实测设 10 时剧烈场景体积直接 −22%。想看碎屑飞溅再调低。 */
+  spallK:4, spallVol:1, spallDrop:13, spallDim:0.85, spallShow:1,
+  /* 断裂面 = 两个平贴面，而不是「删掉一个面」
+     以前断边 → 胞判死 → 整层壳不渲染，物理体积守恒了视觉上却照掉一层壳，
+     淬火后一锤下去肉眼可见地缩水。现在断边只表示「两侧分离」：界面处两侧
+     各生成一层贴合的封闭面（重合、法线相反），裂纹闭合时零间隙看不出缝，
+     张开时露出两个解理面。体积不再凭空消失。
+     代价：平贴面若共享关键点，两侧法线会互相抵消，所以裂纹面要各自的顶点。 */
+  crackFace:1, crackK:2, crackDim:0.55,
+  /* 补边 / 锻接：断边重新连接的三个条件（温度 + 贴合 + 受压）*/
+  /* 注意 weldPress 是「弹性压应变」量级：钢 E=210000MPa，0.0008 ≈ 170MPa，
+     正是锻焊需要的界面压力。写成 0.004 这种塑性量级就永远触发不了。      */
+  weldOn:true, weldT:900, weldGap:0.06, weldRate:0.0004, weldHold:6, weldD:0.35,
+  contactK:0.35, contactCap:20,          /* 断边单边接触：刚度折减 / 压实力饱和倍数 */
+  /* 独立渲染表面：关键点密度场 + SurfaceNets（实验性，默认关闭。
+     surfMode=0 用物理网格（上一轮 marching-cubes 风格胞层表面提取），可靠。
+     surfMode=1 走 SurfaceNets：顶点落在规则体素网格上，平滑不足时表面会呈
+     明显的体素块状「格子结构」，参数没调好前别当默认。                    */
+  surfMode:0, surfRes:9000, surfR:1.00, surfIso:0.50, surfEvery:2, surfSmooth:1,
+  colorMode:0, showEdges:false, edgeSurfOnly:true, showPoints:false, showHammer:true, edgeMode:0
+};
+
+const Eof =T=>CFG.E0*(1-0.80*clamp((T-20)/1100,0,1));
+const syOf=T=>{const t=Math.max(0,(T-20)/1000);return CFG.sy0*Math.exp(-2.226*Math.pow(t,1.6))+6;};
+const HOf =T=>{const t=Math.max(0,(T-20)/1000);return CFG.H0*Math.exp(-2.6*Math.pow(t,1.5));};
+function epsFrac(T){
+  const t=Math.max(0,(T-20)/1000);
+  let e=CFG.duct+3.0*Math.pow(clamp(t,0,1.4),1.3);
+  if(T>1300)e*=Math.exp(-(T-1300)/55);          /* 过烧 */
+  return Math.max(e,0.02);
+}
+/* 材料属性查找表：热循环里每帧要算 50 万次，Math.pow 太慢 */
+const LUTN=1601;
+const LUTE=new Float64Array(LUTN),LUTSY=new Float64Array(LUTN),
+      LUTH=new Float64Array(LUTN),LUTEF=new Float64Array(LUTN);
+function buildLUT(){
+  for(let i=0;i<LUTN;i++){LUTE[i]=Eof(i);LUTSY[i]=syOf(i);LUTH[i]=HOf(i);LUTEF[i]=epsFrac(i);}
+}
+
+/* ==========================================================================
+   2. 状态
+   ========================================================================== */
+let N=0,NT=0,M=0,NF=0,NC=0;
+let pos,prevx,vel,force,kd,T,xi,aus,V0,pArea,nrm,pcol,pemis,pval,pEp;
+let eI,eJ,eL0,eLp,eAl,eD,eSig,eEp,eAe,eBrk,eAxis,eMark;
+let eMarkGen=0;                    /* 边去重标记（世代计数，免去每次清零） */
+let tv,te,tv0,tskip,tvol;
+let cellV,cellV0,tetLoc,cgrad,cScale;
+/* 表面提取用的胞拓扑：cellE=12 条边、cellNB=6 个邻居胞(-1=外部)、cellF=6 个面的 4 顶点 */
+let cellE,cellNB,cellF,cellDead,cellC,cellDB,cellGone;
+let faceQ,faceN=0,MAXF=0;          /* 每帧提取出的可见四边形 */
+/* 裂纹平贴面的独立顶点池：渲染顶点 = [0,N) 物理点 + [N,N+crvN) 裂纹顶点 */
+let MAXCQ=0,crvN=0,crvQ=0,crvP,crvNr,crvSrc,pDead;
+const FACE_E=[[8,7,11,3],[1,10,5,9],[0,9,4,8],[11,6,10,2],[3,2,1,0],[4,5,6,7]];
+let heatNorm=1;
+let surfFlag;
+let edgeOf=new Map();
+let ptEstart,ptElist,pComp,pCompPrev;  /* 点→边邻接（CSR）+ 局部致密程度及其上帧值 */
+let eWeld;                         /* 断边「已连续满足焊合条件」帧计数 */
+let weldCount=0;
+let totalV0=0,hammerCount=0,iterCount=0,solveMs=0,quenchT=0,settleFrames=0;
+let anvilT=25;                     /* 砧面温度（会吸收热量升温，也会向环境回落） */
+let ySurf=0;                       /* 关键点中心到材料表面的半格偏移 = dy/2。
+   网格最外层的点中心不在表面上：ny=7、Ly=24 时底层点中心在 y=2，而它代表的
+   那层材料的表面在 y=0。任何「接触砧面」的判定都得减掉这个偏移，否则底层点
+   要真的沉进砧面 2mm 才算接触 —— 静置的料根本碰不到砧，导热永远是零。   */
+/* 统一冲击器：锻造锤和测试冲头是同一个动力学，只是 kind 不同。
+   kind='forge' → 计数、允许锻接、给玩家提示
+   kind='test'  → 不计数、出冲击测试报告（透入/新增断边/吸收能量/承载系数） */
+let hammer={active:false,phase:0,t:0,y0:0,y1:0,y:0,vy:0,hx:0,hz:0,kind:'forge'};
+let hamSY=0,hamA=0,hamT=0,hamN=0,hamW=0,hamFavg=0,lastPen=0;   /* 接触面积/温度/点数累积 · 冲量预算已花 · 锤力显示 · 上一锤透入深度 */
+let hamY=0,hamC=3,hamH=0;          /* 接触点高度累积 · 当前约束因子 c · 锤下真实料厚 mm */
+let anvilA=0,anvilSY=0,anvilN=0;   /* 贴砧层面积/流动应力/点数 —— 摩擦 hill 要用 */
+/* 有效承载：锤底下边网络的「还连着多少」。
+   hamLive    = Σ eAe·(断边则 contactK，否则 1)
+   hamCapFull = Σ eAe                      （完全完好时的总承载截面）
+   hamBear    = hamLive/hamCapFull          （完好件=1；有裂纹/分层/未融合 <1）
+   这是「锻件瑕疵 → 抗冲击性能」的物理通道：锤能看见材料已经断了、没连上。
+   注意只吃拓扑不连续（eBrk），不重复折减连续损伤 eD —— 后者已由本构的
+   eSig = sig·(1-eD) 负责，两处都算会形成「越压越软」的正反馈。        */
+let hamLive=0,hamCapFull=0,hamBear=1;   /* hamCapFull = 完好时应有的总承载截面（bear 的分母） */
+let testRpt=null,testBrk0=0,testBearSum=0,testBearN=0;   /* 冲击测试：打前断边数 / 承载系数累积 */
+let auto=null;
+
+const id=(i,j,k)=>i+CFG.nx*(j+CFG.ny*k);
+function isSurfIdx(i,j,k){return i===0||j===0||k===0||i===CFG.nx-1||j===CFG.ny-1||k===CFG.nz-1;}
+const vscaleAt=i=>1+3*(ALPH_TH*(T[i]-TREF)+BETA_TR*xi[i]);
+
+/* ==========================================================================
+   3. 建网格：材料点 + 邻接图（边）+ 体元（四面体）
+   --------------------------------------------------------------------------
+   这个网格不做形状表征，只做「判断器」：边存状态、体元管体积。
+   ========================================================================== */
+function buildAll(){
+  const {nx,ny,nz,Lx,Ly,Lz}=CFG;
+  N=nx*ny*nz;
+  pos=new Float64Array(N*3); prevx=new Float64Array(N*3); vel=new Float64Array(N*3);
+  force=new Float64Array(N*3); kd=new Float64Array(N);
+  T=new Float64Array(N); xi=new Float64Array(N); aus=new Float64Array(N);
+  V0=new Float64Array(N); pArea=new Float64Array(N);
+  nrm=new Float32Array(N*3); pcol=new Float32Array(N*3); pemis=new Float32Array(N);
+  pval=new Float64Array(N); surfFlag=new Uint8Array(N); pEp=new Float64Array(N);
+  dTscratch=new Float64Array(N);
+
+  const dx=Lx/(nx-1),dy=Ly/(ny-1),dz=Lz/(nz-1);
+  ySurf=dy*0.5;                    /* 点中心 → 表面的半格偏移（见 ySurf 声明处注释） */
+  for(let k=0;k<nz;k++)for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
+    const p=id(i,j,k)*3;
+    pos[p]=-Lx/2+i*dx; pos[p+1]=dy*0.5+j*dy; pos[p+2]=-Lz/2+k*dz;
+    T[id(i,j,k)]=CFG.T0; aus[id(i,j,k)]=1;
+    surfFlag[id(i,j,k)]=isSurfIdx(i,j,k)?1:0;
+  }
+  prevx.set(pos);
+  buildLUT();
+
+  /* ---- 边：轴向 / 面对角 / 体对角 ---- */
+  const map=new Map(),AI=[],AJ=[],AX=[];
+  const add=(a,b,axis)=>{
+    const kk=a<b?a*N+b:b*N+a;
+    if(map.has(kk))return; map.set(kk,AI.length);
+    AI.push(a);AJ.push(b);AX.push(axis?1:0);
+  };
+  for(let k=0;k<nz;k++)for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
+    if(i+1<nx)add(id(i,j,k),id(i+1,j,k),1);
+    if(j+1<ny)add(id(i,j,k),id(i,j+1,k),1);
+    if(k+1<nz)add(id(i,j,k),id(i,j,k+1),1);
+  }
+  for(let k=0;k<nz-1;k++)for(let j=0;j<ny-1;j++)for(let i=0;i<nx-1;i++){
+    const c=(a,b,d)=>id(i+a,j+b,k+d);
+    add(c(0,0,0),c(1,1,0)); add(c(1,0,0),c(0,1,0));
+    add(c(0,0,1),c(1,1,1)); add(c(1,0,1),c(0,1,1));
+    add(c(0,0,0),c(1,0,1)); add(c(1,0,0),c(0,0,1));
+    add(c(0,1,0),c(1,1,1)); add(c(1,1,0),c(0,1,1));
+    add(c(0,0,0),c(0,1,1)); add(c(0,1,0),c(0,0,1));
+    add(c(1,0,0),c(1,1,1)); add(c(1,1,0),c(1,0,1));
+    add(c(0,0,0),c(1,1,1)); add(c(1,0,0),c(0,1,1));
+    add(c(0,1,0),c(1,0,1)); add(c(0,0,1),c(1,1,0));
+  }
+  M=AI.length;
+  eI=new Int32Array(AI); eJ=new Int32Array(AJ); eAxis=new Uint8Array(M);
+  eL0=new Float64Array(M); eLp=new Float64Array(M); eAl=new Float64Array(M);
+  eD=new Float64Array(M); eSig=new Float64Array(M); eEp=new Float64Array(M);
+  eAe=new Float64Array(M); eBrk=new Uint8Array(M); eMark=new Int32Array(M);
+  const VpAvg=(Lx*Ly*Lz)/N;
+  heatNorm=N/Math.max(M,1);
+  for(let e=0;e<M;e++){
+    const a=eI[e],b=eJ[e];
+    eAxis[e]=AX[e];
+    eL0[e]=Math.hypot(pos[b*3]-pos[a*3],pos[b*3+1]-pos[a*3+1],pos[b*3+2]-pos[a*3+2]);
+    eAe[e]=VpAvg/eL0[e];                 /* 等效承载面积（能量等效的简化取法） */
+  }
+  edgeOf=new Map();
+  for(let e=0;e<M;e++){const a=eI[e],b=eJ[e];edgeOf.set(a<b?a*N+b:b*N+a,e);}
+  eWeld=new Uint8Array(M); pComp=new Float64Array(N); pCompPrev=new Float64Array(N);
+  pComp.fill(1); pCompPrev.fill(1);
+
+  /* ---- 点→边邻接（CSR）：补边判据要用到「局部是否受压」 ---- */
+  {
+    const cnt=new Int32Array(N);
+    for(let e=0;e<M;e++){cnt[eI[e]]++;cnt[eJ[e]]++;}
+    ptEstart=new Int32Array(N+1);
+    for(let i=0;i<N;i++)ptEstart[i+1]=ptEstart[i]+cnt[i];
+    ptElist=new Int32Array(ptEstart[N]);
+    const cur=Int32Array.from(ptEstart.subarray(0,N));
+    for(let e=0;e<M;e++){ptElist[cur[eI[e]]++]=e;ptElist[cur[eJ[e]]++]=e;}
+  }
+
+  /* ---- 体元：每胞 5 个四面体（只用于体积，无需跨胞协调） ----
+     体积约束落在「胞」上：5 个体积之和 = 胞体积，8 个角点，梯度精确 */
+  const TV=[],TL=[],CV=[];
+  const LOC=[[0,1,3,4],[1,2,3,6],[3,4,6,7],[1,3,4,6],[1,4,5,6]];
+  for(let k=0;k<nz-1;k++)for(let j=0;j<ny-1;j++)for(let i=0;i<nx-1;i++){
+    const c=(a,b,d)=>id(i+a,j+b,k+d);
+    const v=[c(0,0,0),c(1,0,0),c(1,1,0),c(0,1,0),c(0,0,1),c(1,0,1),c(1,1,1),c(0,1,1)];
+    for(let q=0;q<8;q++)CV.push(v[q]);
+    for(const L of LOC){TV.push(v[L[0]],v[L[1]],v[L[2]],v[L[3]]);TL.push(L[0],L[1],L[2],L[3]);}
+  }
+  NT=TV.length/4; NC=CV.length/8;
+  cellV=new Int32Array(CV); tetLoc=new Int32Array(TL);
+  cellV0=new Float64Array(NC); cgrad=new Float64Array(24); cScale=new Float64Array(NC);
+  tv=new Int32Array(TV); te=new Int32Array(NT*6); tv0=new Float64Array(NT);
+  tskip=new Uint8Array(NT); tvol=new Float64Array(NT);
+  for(let t=0;t<NT;t++){
+    const s=[tv[4*t],tv[4*t+1],tv[4*t+2],tv[4*t+3]];let n=0;
+    for(let p=0;p<4;p++)for(let q=p+1;q<4;q++){
+      const a=s[p],b=s[q],kk=a<b?a*N+b:b*N+a;
+      te[6*t+(n++)]=map.has(kk)?map.get(kk):0;
+    }
+  }
+
+  /* ---- 胞拓扑：12 条边 / 6 个邻居 / 6 个面 ----
+     表面不再是「预先算好的外壳」，而是每帧按「活胞 vs 死胞/外部」现场提取：
+     外层被打裂后自然露出下一层的面，并自动生成裂纹侧壁 —— 不会留空洞。   */
+  const CELL_E=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+  const CELL_F=[[0,4,7,3],[1,2,6,5],[0,1,5,4],[3,7,6,2],[0,3,2,1],[4,5,6,7]]; // -X +X -Y +Y -Z +Z
+  const NBI=[[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]];
+  const nx1=nx-1,ny1=ny-1,nz1=nz-1;
+  cellE=new Int32Array(NC*12); cellNB=new Int32Array(NC*6); cellF=new Int32Array(NC*24);
+  cellDead=new Uint8Array(NC); cellC=new Float64Array(NC*3);
+  cellDB=new Uint8Array(NC); cellGone=new Uint8Array(NC);   /* 断边数 / 已完全脱落 */
+  pDead=new Float64Array(N);
+  for(let k=0;k<nz1;k++)for(let j=0;j<ny1;j++)for(let i=0;i<nx1;i++){
+    const c=i+nx1*(j+ny1*k);
+    for(let s2=0;s2<12;s2++){
+      const a=cellV[8*c+CELL_E[s2][0]],b=cellV[8*c+CELL_E[s2][1]];
+      const ei=edgeOf.get(a<b?a*N+b:b*N+a);
+      cellE[c*12+s2]=ei===undefined?0:ei;
+    }
+    for(let s2=0;s2<6;s2++){
+      const o=NBI[s2],ii=i+o[0],jj=j+o[1],kk=k+o[2];
+      cellNB[c*6+s2]=(ii<0||ii>=nx1||jj<0||jj>=ny1||kk<0||kk>=nz1)?-1:(ii+nx1*(jj+ny1*kk));
+      for(let q2=0;q2<4;q2++)cellF[c*24+s2*4+q2]=cellV[8*c+CELL_F[s2][q2]];
+    }
+  }
+  MAXF=NC*6; faceQ=new Int32Array(MAXF*4); faceN=0;
+  /* 裂纹平贴面顶点池：每个裂纹 quad 占 4 个独立顶点。最坏是「所有内部面全裂」，
+     实际远小于此，所以按 NC*3 给预算（≈ 半个全裂），超限自动退化为共享顶点。 */
+  MAXCQ=Math.min(MAXF,NC*3);
+  crvP=new Float64Array(MAXCQ*4*3); crvNr=new Float64Array(MAXCQ*4*3);
+  crvSrc=new Int32Array(MAXCQ*4); crvN=0; crvQ=0;
+
+  /* ---- 初始体积 ---- */
+  for(let i=0;i<N;i++)V0[i]=0;
+  for(let t=0;t<NT;t++){
+    const v=tetVol(tv[4*t],tv[4*t+1],tv[4*t+2],tv[4*t+3]);
+    tv0[t]=v;
+    V0[tv[4*t]]+=v*.25;V0[tv[4*t+1]]+=v*.25;V0[tv[4*t+2]]+=v*.25;V0[tv[4*t+3]]+=v*.25;
+  }
+  totalV0=0;for(let i=0;i<N;i++)totalV0+=V0[i];
+  for(let c=0;c<NC;c++){
+    let s=0;
+    for(let q=0;q<5;q++)s+=tv0[c*5+q];
+    cellV0[c]=s;
+  }
+
+  hammerCount=0;iterCount=0;quenchT=0;settleFrames=0;auto=null;showcase=null;
+  testRpt=null;lastPen=0;hamBear=1;hammer.kind='forge';
+  hammer={active:false,phase:0,t:0,y0:0,y1:0,y:0,hx:0,hz:0};
+  allocGLBuffers();
+}
+function tetVol(a,b,c,d){
+  const ax=pos[a*3],ay=pos[a*3+1],az=pos[a*3+2];
+  const ux=pos[b*3]-ax,uy=pos[b*3+1]-ay,uz=pos[b*3+2]-az;
+  const vx=pos[c*3]-ax,vy=pos[c*3+1]-ay,vz=pos[c*3+2]-az;
+  const wx=pos[d*3]-ax,wy=pos[d*3+1]-ay,wz=pos[d*3+2]-az;
+  return (ux*(vy*wz-vz*wy)+uy*(vz*wx-vx*wz)+uz*(vx*wy-vy*wx))/6;
+}
+
+/* ==========================================================================
+   4. 求解器：每迭代一次 = 边本构 → 松弛 → 体积投影 → 接触
+   ========================================================================== */
+function solveIter(dtIt,hammerOn){
+  const {alpha,beta,gamma,maxdEp,vmax,fricAnvil,fricHammer}=CFG;
+  force.fill(0);kd.fill(0);
+
+  /* 4.1 边：平滑本构 + 塑性流动 + 背应力 + 损伤 */
+  for(let e=0;e<M;e++){
+    if(eBrk[e]){
+      /* 断裂 ≠ 消失：裂纹面是「单边接触面」——只能压，不能拉。
+         受压（L<Leff）时仍按 contactK 折减的刚度传力，这正是碎料堆和闭合
+         裂纹的承力方式，也是锻件开裂后还能继续锻打、体积不会一路塌陷的
+         原因；受拉时完全不传力，裂纹照常张开。
+         之前断边一律 eSig=0，导致断口两端被塑性流动无限拉远、死胞被压扁，
+         体积单调缩小 —— 那不是裂纹，那是凭空消失。                    */
+      const ia=eI[e],ib=eJ[e],ia3=ia*3,ib3=ib*3;
+      let ux=pos[ib3]-pos[ia3],uy=pos[ib3+1]-pos[ia3+1],uz=pos[ib3+2]-pos[ia3+2];
+      const L=Math.sqrt(ux*ux+uy*uy+uz*uz);
+      if(L<1e-7){eSig[e]=0;continue;}
+      ux/=L;uy/=L;uz/=L;
+      const Te=0.5*(T[ia]+T[ib]), xiE=0.5*(xi[ia]+xi[ib]);
+      let ti=Te|0; if(ti<0)ti=0; else if(ti>=LUTN)ti=LUTN-1;
+      /* 参考长度用 L0·ρ_local 而不是 L0+Lp：断口已经断开，不该继承拉伸塑性
+         记忆，否则接触力会把死胞撑得比原体积还大（实测 +4.7% 膨胀）。
+         ρ_local = 该处未断邻边的平均 L/L0，即「周围材料实际被压到多短」。 */
+      const Lref=eL0[e]*0.5*(pComp[ia]+pComp[ib])*(1+ALPH_TH*(Te-TREF)+BETA_TR*xiE);
+      if(L>=Lref){eSig[e]=0;continue;}
+      let sig=LUTE[ti]*CFG.contactK*(L-Lref)/eL0[e];      /* 负 = 压 */
+      const cap=LUTSY[ti]*CFG.contactCap;                 /* 压实后力饱和 */
+      if(sig<-cap)sig=-cap;
+      eSig[e]=sig;
+      const f=sig*eAe[e],fx=f*ux,fy=f*uy,fz=f*uz;
+      force[ia3]+=fx;force[ia3+1]+=fy;force[ia3+2]+=fz;
+      force[ib3]-=fx;force[ib3+1]-=fy;force[ib3+2]-=fz;
+      const ke=LUTE[ti]*CFG.contactK*eAe[e]/eL0[e];
+      kd[ia]+=ke;kd[ib]+=ke;
+      continue;
+    }
+    const a=eI[e],b=eJ[e],a3=a*3,b3=b*3;
+    let ux=pos[b3]-pos[a3],uy=pos[b3+1]-pos[a3+1],uz=pos[b3+2]-pos[a3+2];
+    const L=Math.sqrt(ux*ux+uy*uy+uz*uz);
+    if(L<1e-7)continue;
+    ux/=L;uy/=L;uz/=L;
+
+    const Te=0.5*(T[a]+T[b]);
+    const xiE=0.5*(xi[a]+xi[b]);
+    let ti=Te|0; if(ti<0)ti=0; else if(ti>=LUTN)ti=LUTN-1;
+    const E=LUTE[ti];
+    const Lth=eL0[e]*(ALPH_TH*(Te-TREF)+BETA_TR*xiE);   /* 热膨胀 + 相变膨胀 */
+    const Leff=eL0[e]+eLp[e]+Lth;
+    const epsE=(L-Leff)/eL0[e];                         /* 弹性应变 */
+    const sigT=E*epsE;
+    const syB=(LUTSY[ti]+LUTH[ti]*eEp[e])*(1+2.5*xiE);   /* 淬火硬化 → σy↑ */
+    const w=0.04*syB+0.3;                               /* 屈服过渡锐度 */
+    const al=eAl[e];
+    const rel=sigT-al;                                  /* 相对背应力的应力 */
+    const ar=Math.abs(rel);
+    const sgn=rel>=0?1:-1;
+    const dif=ar-syB, w8=8*w;
+    let sigAbs;
+    if(dif<-w8)      sigAbs=ar;        /* 远未屈服：纯弹性，省掉 log/exp */
+    else if(dif>w8)  sigAbs=syB;
+    else             sigAbs=smin(ar,syB,w);
+    const sig=al+sgn*sigAbs;                            /* 平滑屈服，无 if */
+    eSig[e]=sig*(1-eD[e]);
+
+    /* 塑性流动：限速径向返回
+       need = 回到屈服面所需的塑性应变（精确）；rate = 黏塑性速率上限。
+       取 min 而非纯速率式 —— 否则 E/σy≈1900 时每次迭代的数值抖动都会被
+       塑性吃掉，产生「棘轮」（净应变 0.35、累积路径 8.0）。            */
+    let dEp=0;
+    const over=ar-syB;
+    if(over>0){
+      const need=over/E;
+      const rate=dtIt*(gamma*over/Math.max(syB,1)+CFG.creep);
+      dEp=Math.min(need,rate);
+      if(dEp>maxdEp)dEp=maxdEp;
+    }
+    if(dEp>1e-12){
+      eLp[e]+=eL0[e]*dEp*sgn;
+      pEp[a]+=0.5*dEp;pEp[b]+=0.5*dEp;   /* 逐点累积塑性应变：锤的流动阻力要用 */
+      eEp[e]+=dEp;
+      let al2=al+LUTH[ti]*0.5*dEp*sgn;                  /* 背应力 / 包辛格 */
+      const alM=0.5*syB; if(al2>alM)al2=alM; if(al2<-alM)al2=-alM;
+      eAl[e]=al2;
+      /* 损伤：受拉累积、受压愈合
+         锻造之所以能改善材料，正是因为压应力会闭合/焊合内部孔隙（这也是
+         「锻比」存在的意义）。只累积不愈合会让工件在几乎纯压的镦粗中
+         莫名开裂 —— 那不是钢的行为。                                  */
+      const ef=Math.max(LUTEF[ti]*(1-0.7*xiE),0.02);
+      let d2;
+      if(sig>0) d2=eD[e]+dEp/ef;
+      else      d2=eD[e]-CFG.heal*dEp/ef;               /* 压合孔隙 */
+      if(d2>1)d2=1; else if(d2<0)d2=0;
+      eD[e]=d2; if(d2>=1)eBrk[e]=1;
+      if(CFG.heatMult>0){                               /* 塑性功 → 热（β≈0.9） */
+        /* heatNorm=N/M 抵消点阵过刚带来的能量重复计数 */
+        const dT=0.9*Math.abs(sig)*dEp*1e-3/RHOC*heatNorm*CFG.heatMult;
+        T[a]+=dT*0.5; T[b]+=dT*0.5;
+      }
+    }
+    const f=eSig[e]*eAe[e],fx=f*ux,fy=f*uy,fz=f*uz;
+    force[a3]+=fx;force[a3+1]+=fy;force[a3+2]+=fz;
+    force[b3]-=fx;force[b3+1]-=fy;force[b3+2]-=fz;
+    const ke=E*eAe[e]/eL0[e];
+    kd[a]+=ke;kd[b]+=ke;
+  }
+
+  /* 4.2 准静态松弛：带周期重启的动量梯度下降（锻造是准静态，不要惯性） */
+  iterCount++;
+  const restart=(iterCount%CFG.restart)===0;
+  for(let i=0;i<N;i++){
+    const i3=i*3,ki=Math.max(kd[i],1e-6);
+    let vx=alpha*force[i3]/ki,vy=alpha*force[i3+1]/ki,vz=alpha*force[i3+2]/ki;
+    if(restart){vel[i3]=vx;vel[i3+1]=vy;vel[i3+2]=vz;}
+    else{vel[i3]=beta*vel[i3]+vx;vel[i3+1]=beta*vel[i3+1]+vy;vel[i3+2]=beta*vel[i3+2]+vz;}
+    const m=Math.sqrt(vel[i3]*vel[i3]+vel[i3+1]*vel[i3+1]+vel[i3+2]*vel[i3+2]);
+    if(m>vmax){const s=vmax/m;vel[i3]*=s;vel[i3+1]*=s;vel[i3+2]*=s;}
+    pos[i3]+=vel[i3];pos[i3+1]+=vel[i3+1];pos[i3+2]+=vel[i3+2];
+  }
+
+  /* 4.3 逐点体积守恒（PBD 投影）—— 塑性不可压缩由它保证 */
+  if(CFG.volRelax>0.001)projectVolume(CFG.volRelax);
+
+  /* 4.4 砧面接触（y=0，摩擦形成死区 → 鼓形） */
+  anvilA=0;anvilSY=0;anvilN=0;
+  const awA=CFG.anvilFinite>0?CFG.anvilW*0.5:1e9, adA=CFG.anvilFinite>0?CFG.anvilD*0.5:1e9;
+  for(let i=0;i<N;i++){
+    const i3=i*3;
+    const onAnvil=Math.abs(pos[i3])<=awA&&Math.abs(pos[i3+2])<=adA;
+    /* 判定要减掉半格偏移：底层点的中心在 y=ySurf，它代表的那层材料的表面才
+       在 y=0。以前写 pos<0，等于让料先陷进铁砧 2mm 才被挡住 —— 静置的料实际
+       上是「沉在砧里」的，而且有限砧面永远触发不了（锤压下的那点位移还不够
+       先把这 2mm 走完）。                                                  */
+    if(pos[i3+1]<ySurf&&onAnvil){
+      pos[i3+1]=ySurf;
+      pos[i3]  =prevx[i3]  +(pos[i3]  -prevx[i3]  )*(1-fricAnvil);
+      pos[i3+2]=prevx[i3+2]+(pos[i3+2]-prevx[i3+2])*(1-fricAnvil);
+      vel[i3+1]=0;
+    }
+    /* 贴砧层统计（判定同 §5 导热：点中心要减掉半格偏移 ySurf）。
+       给摩擦 hill 提供接触面积，也给「底面被冷砧激冷 → 局部 σy 高」留了口子。
+       悬在砧面外的部分不算 —— 那里本来就没有支撑，不该贡献摩擦。 */
+    if(onAnvil&&pos[i3+1]-ySurf<=0.15&&pArea[i]>0){
+      let tj=(T[i]|0); if(tj<0)tj=0; else if(tj>=LUTN)tj=LUTN-1;
+      anvilSY+=(LUTSY[tj]+LUTH[tj]*pEp[i])*(1+2.5*xi[i]);
+      anvilA+=pArea[i];anvilN++;
+    }
+  }
+  /* 4.5 锤头接触（平面 + 倾角 + 矩形足迹 + 摩擦），放在最后让它赢 */
+  hamSY=0;hamA=0;hamT=0;hamN=0;hamLive=0;hamCapFull=0;hamY=0;
+  if(hammerOn){
+    const tn=Math.tan(CFG.tilt*Math.PI/180);
+    const hw=CFG.hW*0.5,hd=CFG.hD*0.5,hx=hammer.hx,hz=hammer.hz,hy=hammer.y;
+    eMarkGen++;
+    for(let i=0;i<N;i++){
+      const i3=i*3,px=pos[i3],pz=pos[i3+2];
+      if(px<hx-hw||px>hx+hw||pz<hz-hd||pz>hz+hd)continue;
+      const d=pos[i3+1]-(hy+tn*(px-hx));
+      /* 0.1mm 接触皮：皮内的弹性回弹不再触发投影。没有这层皮，被锤按住的
+         点每次迭代弹回面上方就被再压平一次，弹塑性过冲被反复整个吃成塑性
+         应变（迭代棘轮）—— 冷打几锤表面就裂、塑性功虚热让材料越打越软。 */
+      if(d<=0.1)continue;
+      pos[i3+1]-=d-0.1;
+      pos[i3]  =prevx[i3]  +(pos[i3]  -prevx[i3]  )*(1-fricHammer);
+      pos[i3+2]=prevx[i3+2]+(pos[i3+2]-prevx[i3+2])*(1-fricHammer);
+      vel[i3+1]=0;
+      /* 接触点流动应力与面积的累积（下一步算流动阻力用） */
+      let tj=(T[i]|0); if(tj<0)tj=0; else if(tj>=LUTN)tj=LUTN-1;
+      hamSY+=(LUTSY[tj]+LUTH[tj]*pEp[i])*(1+2.5*xi[i]);
+      hamA+=pArea[i];hamT+=T[i];hamN++;hamY+=pos[i3+1];
+    }
+    /* 承载网络体检（独立一遍）：只统计两端都落在锤足迹内的边，也就是严格
+       「锤底下的材料」——不能把接触区外一圈没被锻过的软边算进来，那会让
+       σy_eff 偏低、锤陷得比标定值深得多（实测展宽从 50mm 漂到 70mm）。
+       只吃拓扑不连续：断边 = 裂纹 / 分层 / 未融合界面，只能压不能拉，承载
+       按 contactK 折减。连续损伤 eD 不在这里折减——它的软化已经由本构的
+       eSig = sig·(1-eD) 负责，再算一次是重复记账，而且会形成「越压越软」
+       的正反馈。世代标记保证一条边只统计一次，免得每子步清零一个大数组。 */
+    eMarkGen++;
+    for(let i=0;i<N;i++){
+      const i3=i*3;
+      if(pos[i3]<hx-hw||pos[i3]>hx+hw||pos[i3+2]<hz-hd||pos[i3+2]>hz+hd)continue;
+      for(let q=ptEstart[i];q<ptEstart[i+1];q++){
+        const e=ptElist[q];
+        if(eMark[e]===eMarkGen)continue;
+        eMark[e]=eMarkGen;
+        const a23=eI[e]*3,b23=eJ[e]*3;
+        if(pos[a23]<hx-hw||pos[a23]>hx+hw||pos[a23+2]<hz-hd||pos[a23+2]>hz+hd)continue;
+        if(pos[b23]<hx-hw||pos[b23]>hx+hw||pos[b23+2]<hz-hd||pos[b23+2]>hz+hd)continue;
+        const ae=eAe[e];
+        hamCapFull+=ae;
+        hamLive+=ae*(eBrk[e]?CFG.contactK:1);
+      }
+    }
+    /* bear 必须在这里无条件更新：轻锤冷料时接触只持续一两个子步（透入 0.2mm
+       对应 8ms，一帧就过去了），挂在 if(hamN>0) 里会永远读不到 —— 实测打击
+       全程 hamN 都是 0，报告里 bear 恒为 1。                              */
+    if(hamCapFull>1e-9)hamBear=hamLive/hamCapFull;
+    /* 锤动力学（每个子步）——冲量预算制：
+       锤带动能 E0=½mv²。接触后以 hVMax 可控速率下压（准静态求解器一次只能
+       消化零点几 mm 的强加位移，直接显式积分会把接触压缩到 1 个子步），
+       每子步花费预算 W += F·ds。F 用锻造流动阻力公式 F = c·σy_eff·A·bear
+       （平冲头约束因子 c≈3；σy_eff 用与本构一致的完整表达式：基值 + 加工硬化
+       （边 eEp）+ 相变硬化（淬火 ×(1+2.5ξ)），再按边的剩余承载加权；
+       bear = 接触区承载网络健康度，见上面 §4.5 边扫描）。
+       热钢 σy≈33MPa → F≈百 kN → 透入数 mm、流动充分；
+       冷钢 σy≈400MPa（淬火后 ≈1GPa）→ F≈MN 级 → 一两个子步预算耗尽，
+       几乎没印地弹开。这就是「温度决定可锻性」的物理通道。
+       而「大力能不能强敲出形变」也在这里回答：能，但代价是预算花在断裂上——
+       E0 变大 → 透入更深 → 边应变更大 → 网格本构那边该裂的裂、该碎的碎，
+       锤子不会像旧版那样无视材料死活硬压到位。                          */
+    if(hammer.phase===0){
+      let F=0;
+      if(hamN>0){
+        /* 有效流动应力 σy_eff（按剩余承载加权）+ 承载系数 bear。
+           完好件：bear=1、σy_eff≈接触区 σy 均值 → 与旧解析式同值，标定不动。
+           有瑕疵的件（裂纹 / 分层 / 未融合界面）：bear<1 → 同一把锤陷得更深、
+           材料更容易被砸溃 → 这就是「锻合不良 → 抗冲击差」的物理通道。
+           注意 bear 只吃「承载网络的健康度」，不是拿温度/硬度做的硬编码判断。 */
+        const syEff=hamSY/hamN;                        /* 接触点 σy 均值：与旧解析式同值 */
+        /* 约束因子 c(h/2a)：见 CFG.cThick 处注释。接触点高度的均值就是锤下
+           顶面高度，减掉半格偏移 ySurf 得到真实料厚（底面贴砧，表面在 y=0）。 */
+        const aH=0.5*Math.min(CFG.hW,CFG.hD);
+        hamH=Math.max(hamY/hamN-ySurf,0.5);
+        /* 摩擦 hill：接触面摩擦阻碍材料径向流出，把平均压力整个抬高一截。
+           经典圆柱镦粗解 p̄/σy = 1 + (2μ/3)(R/h)，R 是接触面等效半径、h 是高度。
+           以前 fricAnvil 只影响形状（鼓形），完全不进锤力 —— 砧面擦得再糙，
+           锤该压多深还压多深。现在摩擦真的吃动能：料越扁（h 小、R 大）摩擦
+           项越大，这是真实镦粗「越扁越打不动」的主因，也和砧面导热联动
+           （底面被激冷 → 该层 σy 更高 → 更不想流）。
+           注意这**不是**另加一份底面反力：砧面接触点速度为 0，物理上不做功，
+           摩擦抬高的是锤端必须克服的平均压力。                            */
+        const Reff=Math.sqrt(Math.max(anvilA,1)/Math.PI);
+        const cFric=CFG.cFric>0?CFG.cFricK*fricAnvil*Reff/hamH:0;
+        hamC=(CFG.cThick>0?3+(CFG.cMax-3)*smoothstep(CFG.cHi,CFG.cLo,hamH/(2*aH)):3)+cFric;
+        F=hamC*syEff*hamA*hamBear;
+      }
+      hamFavg=lerp(hamFavg,F+CFG.hMass*9.8,0.25);
+      /* 只统计真正压在材料上的子步：那才是「锤压下去时材料连着多少」 */
+      if(hammer.kind==='test'&&hamN>0){testBearSum+=hamBear;testBearN++;}
+      if(hamN===0){                            /* 未接触：匀速挥锤接近（限速防瞬移） */
+        hammer.vy=-CFG.hVMax*8;
+        hammer.y+=hammer.vy*dtIt;
+      }else{                                   /* 接触中：预算制下压 */
+        const ds=CFG.hVMax*dtIt;
+        hammer.y-=ds;
+        hamW+=F*ds;
+        hammer.vy=-CFG.hVMax;
+        if(hamW>=0.5*CFG.hMass*CFG.hSpeed*CFG.hSpeed*1e3)startRetract();
+      }
+      if(hammer.y<=hammer.y1){hammer.y=hammer.y1;startRetract();}
+    }
+  }
+  prevx.set(pos);
+}
+
+/* 逐胞（六面体）体积投影：V_cell = Σ(5 个体元体积)，约束到 V0_cell·scale
+   四面体梯度：∇b=(v×w)/6  ∇c=(w×u)/6  ∇d=(u×v)/6  ∇a=-(∇b+∇c+∇d)
+   分母 G=Σ|∇_v V|² 是精确值（8 个角点），因此 relax<1 时无条件收敛       */
+/* ==========================================================================
+   4b. 补边 / 锻接（re-bonding）
+   只有断裂没有重连，材料会一路碎下去：断裂边不再传力、死胞退出体积约束，
+   于是体积单调缩小 —— 这在物理上是错的。真实锻造里相反：高温 + 大压应力 +
+   界面贴合会让断口重新焊合（锻焊就是靠这个）。所以断边必须能「补回来」。
+   四个条件同时成立并持续 weldHold 帧才重连：
+     ① 温度   T ≥ weldT                   —— 原子扩散要热
+     ② 间隙   L ≤ L0·ρ_local·(1+gap)      —— 断口得合拢到周围材料的致密程度
+     ③ 加压   ρ_local 正在变小            —— 锻焊靠压力，静置的裂纹不该自愈
+   ② 里的 ρ_local 是该处未断邻边的平均 L/L0：用它当参考尺子，判据才不会
+   被整体塑性压缩污染（工件压扁一半时 L 本来就只有 L0 的一半）。
+   重连后不是完好如初：残留 weldD 的损伤（焊合区永远比母体弱），
+   背应力清零（新界面没有包辛格记忆），但塑性记忆 Lp 保留 → 形状不跳变。
+   ========================================================================== */
+/* pComp[i] = 该点所有未断邻边的 L/L0 平均值 = 「局部材料实际被压到多短」。
+   注意不能用 L/Leff（弹性应变）当判据：钢的弹性应变只有万分之几，卸载后
+   立刻回到 ≈0，压应力窗口窄到几乎不存在；而 L/L0 反映的是塑性压缩程度
+   （锻造中可达 20%~50%），是稳定、可测、量级正确的「局部致密程度」参考。 */
+function pointCompress(){
+  const prv=pCompPrev;
+  for(let i=0;i<N;i++){
+    let s=0,n=0;
+    for(let k=ptEstart[i];k<ptEstart[i+1];k++){
+      const e=ptElist[k]; if(eBrk[e])continue;
+      const a=eI[e],b=eJ[e],a3=a*3,b3=b*3;
+      const dx=pos[b3]-pos[a3],dy=pos[b3+1]-pos[a3+1],dz=pos[b3+2]-pos[a3+2];
+      s+=Math.sqrt(dx*dx+dy*dy+dz*dz)/eL0[e]; n++;
+    }
+    prv[i]=pComp[i]; pComp[i]=n?s/n:prv[i];   /* 邻边全断时沿用上帧，别跳回 1 */
+  }
+}
+function healEdges(force){
+  if(!ptElist)return 0;
+  let nbrk=0; for(let e=0;e<M;e++)if(eBrk[e])nbrk++;
+  if(!nbrk)return 0;
+  const Tw=CFG.weldT, gap=CFG.weldGap, rate=CFG.weldRate, hold=force?0:CFG.weldHold;
+  let n=0;
+  for(let e=0;e<M;e++){
+    if(!eBrk[e]){eWeld[e]=0;continue;}
+    const a=eI[e],b=eJ[e],a3=a*3,b3=b*3;
+    const Te=0.5*(T[a]+T[b]);
+    if(!force&&Te<Tw){eWeld[e]=0;continue;}
+    const dx=pos[b3]-pos[a3],dy=pos[b3+1]-pos[a3+1],dz=pos[b3+2]-pos[a3+2];
+    const L=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    const rl=0.5*(pComp[a]+pComp[b]);
+    if(L>eL0[e]*rl*(1+gap)){eWeld[e]=0;continue;}
+    /* ③ 正在被压：ρ_local 相对上一帧在减小（rate=0 则跳过此判据） */
+    if(!force&&rate>0&&(2*rl-(pCompPrev[a]+pCompPrev[b]))>-2*rate){eWeld[e]=0;continue;}
+    if(++eWeld[e]<hold)continue;
+    /* 重连瞬间的静止长度：若保持原 Leff，断口往往已显著短于 Leff，
+       一接上就是巨大的弹性压应变（远超屈服应变）→ 塑性冲击、数值抖动。
+       物理上新结合的界面本就没有残余应力，所以把静止长度朝当前长度靠拢
+       70%，只留 30% 的压缩量作为焊合残余压应力。                        */
+    const xiE=0.5*(xi[a]+xi[b]);
+    const Lth=eL0[e]*(ALPH_TH*(Te-TREF)+BETA_TR*xiE);
+    const LeffOld=eL0[e]+Lth+eLp[e];
+    eLp[e]=clamp(L+0.30*(LeffOld-L)-eL0[e]-Lth,-0.9*eL0[e],3*eL0[e]);
+    eBrk[e]=0; eD[e]=CFG.weldD; eAl[e]=0; eWeld[e]=0; n++;
+  }
+  weldCount+=n;
+  return n;
+}
+/* 强制焊合所有已贴合的断边（忽略温度/受压/持续帧数）——面板按钮用 */
+function weldAll(){return healEdges(true);}
+
+/* 每帧算一次「胞是否已剥落」：12 条边里断掉 >= spallK 条才算失去完整性。
+   注意不能用「任一条断就算死」——表面损伤集中，那样会让整个外壳一次消失。
+   判死的胞：不再参与体积投影，自身不再渲染，于是内侧活胞的那一面露出来，
+   这正是「往下一层，显示下一层完整的面」。                              */
+function updateCellDead(){
+  const K=CFG.spallK, DROP=CFG.spallDrop;
+  if(pDead)pDead.fill(0);
+  for(let c=0;c<NC;c++){
+    let n=0;
+    for(let s=0;s<12;s++)if(eBrk[cellE[c*12+s]])n++;
+    const d=n>=K?1:0;
+    cellDB[c]=n; cellDead[c]=d;
+    /* 完全粉碎（≥spallDrop 条边全断）才算真的脱落飞走；只裂了一部分的仍留在
+       原位继续渲染 —— 它是「裂开的料」，不是「消失的料」。                */
+    cellGone[c]=(n>=DROP)?1:0;
+    if(d&&pDead)for(let q=0;q<8;q++)pDead[cellV[8*c+q]]+=0.34;
+  }
+  if(pDead)for(let i=0;i<N;i++)if(pDead[i]>1)pDead[i]=1;
+}
+function projectVolume(relax){
+  const g=cgrad;
+  for(let c=0;c<NC;c++){
+    /* 已剥落的胞是否还约束体积：碎料仍然占地方，退出约束就会随整体压缩一起
+       缩水（实测死胞占 14% 时体积白丢 ~7%）。默认继续约束 → 总体积守恒。 */
+    if(cellGone[c]||(cellDead[c]&&!CFG.spallVol))continue;
+    g.fill(0);
+    let V=0;
+    for(let q=0;q<5;q++){
+      const t=c*5+q; tskip[t]=0;
+      const a=tv[4*t],b=tv[4*t+1],cc=tv[4*t+2],d=tv[4*t+3];
+      const a3=a*3,b3=b*3,c3=cc*3,d3=d*3;
+      const ax=pos[a3],ay=pos[a3+1],az=pos[a3+2];
+      const ux=pos[b3]-ax,uy=pos[b3+1]-ay,uz=pos[b3+2]-az;
+      const vx=pos[c3]-ax,vy=pos[c3+1]-ay,vz=pos[c3+2]-az;
+      const wx=pos[d3]-ax,wy=pos[d3+1]-ay,wz=pos[d3+2]-az;
+      V+=(ux*(vy*wz-vz*wy)+uy*(vz*wx-vx*wz)+uz*(vx*wy-vy*wx))/6;
+      const bx=(vy*wz-vz*wy)/6,by=(vz*wx-vx*wz)/6,bz=(vx*wy-vy*wx)/6;
+      const cx=(wy*uz-wz*uy)/6,cy=(wz*ux-wx*uz)/6,cz=(wx*uy-wy*ux)/6;
+      const dx=(uy*vz-uz*vy)/6,dy=(uz*vx-ux*vz)/6,dz=(ux*vy-uy*vx)/6;
+      const l0=tetLoc[4*t]*3,l1=tetLoc[4*t+1]*3,l2=tetLoc[4*t+2]*3,l3=tetLoc[4*t+3]*3;
+      g[l0]-=bx+cx+dx; g[l0+1]-=by+cy+dy; g[l0+2]-=bz+cz+dz;
+      g[l1]+=bx; g[l1+1]+=by; g[l1+2]+=bz;
+      g[l2]+=cx; g[l2+1]+=cy; g[l2+2]+=cz;
+      g[l3]+=dx; g[l3+1]+=dy; g[l3+2]+=dz;
+    }
+    let G=0;
+    for(let v=0;v<8;v++){const o=v*3;G+=g[o]*g[o]+g[o+1]*g[o+1]+g[o+2]*g[o+2];}
+    if(G<1e-12)continue;
+    let sc=0;
+    for(let v=0;v<8;v++)sc+=vscaleAt(cellV[8*c+v]);
+    sc*=0.125;
+    const tgt=cellV0[c]*sc;
+    let C=V-tgt;
+    const lim=1.5*tgt;
+    if(C>lim)C=lim; else if(C<-0.95*tgt)C=-0.95*tgt;
+    const L2=-relax*C/G;
+    for(let v=0;v<8;v++){
+      const p=cellV[8*c+v]*3,o=v*3;
+      pos[p]+=L2*g[o];pos[p+1]+=L2*g[o+1];pos[p+2]+=L2*g[o+2];
+    }
+  }
+}
+
+/* ==========================================================================
+   5. 热：传导 / 相变 / 辐射对流 / 塑性功
+   ========================================================================== */
+let dTscratch=null;
+const Tamb=25;
+function stepThermal(dt){
+  if(CFG.furnaceOn){
+    const r=1-Math.exp(-CFG.furnaceRate*dt);
+    for(let i=0;i<N;i++)T[i]+=(CFG.furnaceT-T[i])*r;
+  }
+  /* 传导：沿轴向边（空间上贴在一起的两段，材料邻接里可能很远 —— 折叠后要改成空间邻接） */
+  const af=ALPH_DIF*dt;
+  dTscratch.fill(0);
+  for(let e=0;e<M;e++){
+    if(!eAxis[e]||eBrk[e])continue;
+    const a=eI[e],b=eJ[e],c=af/(eL0[e]*eL0[e]);
+    const d=(T[b]-T[a])*c;
+    dTscratch[a]+=d;dTscratch[b]-=d;
+  }
+  for(let i=0;i<N;i++)T[i]+=dTscratch[i];
+  /* 相变：奥氏体化 → 淬火转马氏体 → 体积膨胀 0.5% */
+  for(let i=0;i<N;i++){
+    if(T[i]>AUS_T){aus[i]=1;xi[i]=0;}
+    else if(aus[i]&&T[i]<MS_T+MS_W){
+      const x=clamp((MS_T+MS_W-T[i])/MS_W,0,1);
+      if(x>xi[i])xi[i]=x;
+      if(T[i]<MS_T-MS_W*0.6)aus[i]=0;
+    }
+  }
+  /* 表面散热 */
+  const cool=CFG.coolScale*(quenchT>0?22:1);
+  if(cool>0)for(let i=0;i<N;i++){
+    if(pArea[i]<=0)continue;
+    const K=T[i]+273.15,Ka=Tamb+273.15,K2=K*K;
+    const q=EMISS*SB*(K2*K2-Ka*Ka*Ka*Ka)+(quenchT>0?2.5e-3:1.2e-5)*(T[i]-Tamb);
+    let dT=-q*pArea[i]/(RHOC*V0[i])*dt*cool;
+    if(dT<-(T[i]-Tamb))dT=-(T[i]-Tamb);
+    T[i]+=dT;
+  }
+  /* 砧面导热：贴砧的点向砧传热，砧有热容所以会被烤热。
+     贴砧判定 0.15mm —— 与 §4.4 的接触投影同一量级（穿透点被投影回 y=0）。
+     热量双向记账：工件失去的 = 砧吸收的，砧再按 anvilUA 缓慢还给环境。
+     锤正在下压时接触压力剧增，换热系数放大 anvilHammer 倍 —— 所以「锤子按
+     住的那一下」才是真正的激冷时刻，静置只是慢慢温吞地冷。           */
+  if(CFG.anvilCool>0){
+    const hA=CFG.anvilH*((hammer.active&&hammer.phase===0)?CFG.anvilHammer:1);
+    let Q=0;
+    for(let i=0;i<N;i++){
+      if(pArea[i]<=0)continue;
+      if(pos[i*3+1]-ySurf>0.15)continue;
+      const dv=RHOC*V0[i];
+      let drop=hA*(T[i]-anvilT)*pArea[i]/dv*dt;   /* 降温量，砧更热时为负 = 回烤 */
+      if(drop>0&&drop>T[i]-anvilT)drop=T[i]-anvilT;   /* 数值上别冲过平衡 */
+      T[i]-=drop;
+      Q+=drop*dv;                                     /* 砧吸收的热量 J */
+    }
+    anvilT+=Q/CFG.anvilC;
+    anvilT-=(anvilT-Tamb)*CFG.anvilUA/CFG.anvilC*dt;
+  }
+  if(quenchT>0)quenchT-=dt;
+}
+
+/* ==========================================================================
+   6. 锤
+   ========================================================================== */
+function topUnderHammer(){
+  const hw=CFG.hW*0.5,hd=CFG.hD*0.5,hx=hammer.hx,hz=hammer.hz;
+  let top=-1e9;
+  for(let i=0;i<N;i++){
+    const x=pos[i*3],z=pos[i*3+2];
+    if(x<hx-hw||x>hx+hw||z<hz-hd||z>hz+hd)continue;
+    if(pos[i*3+1]>top)top=pos[i*3+1];
+  }
+  return top<-1e8?CFG.Ly:top;
+}
+function brkCount(){let n=0;for(let e=0;e<M;e++)if(eBrk[e])n++;return n;}
+
+/* 统一冲击入口。锻造锤击和冲击测试走的是同一套动力学（同一份冲量预算、
+   同一个 F = 3·σy_eff·A·bear），区别只在记什么、报什么：
+     kind='forge' → 计入锤击次数，给玩家提示
+     kind='test'  → 不计次数，结束时出测试报告（透入 / 新增断边 / 吸能 / 承载）
+   这样「锻完的件抗不抗打」和「锻的时候好不好打」用的是同一把尺子。   */
+function doStrike(kind){
+  if(hammer.active)return;
+  const top=topUnderHammer();
+  hammer.y0=top+4; hammer.y1=top-CFG.depth;
+  hammer.y=hammer.y0; hammer.vy=-CFG.hSpeed*1000;   /* m/s → mm/s */
+  hammer.t=0; hammer.phase=0; hammer.active=true;
+  hammer.kind=kind||'forge';
+  hamW=0; hamFavg=0;
+  if(hammer.kind==='forge')hammerCount++;
+  else{testBrk0=brkCount();testBearSum=0;testBearN=0;}
+}
+/* 起锤（预算花完或到达行程下限）：y1 改记为实际到达位置——回程 lerp 从
+   这里出发，否则锤会瞬移到行程下限、视觉上 diving 穿透 */
+function startRetract(){
+  /* 防重入：预算耗尽和到达行程下限可能在同一个子步里连续触发两次，
+     第二次进来时 testBearSum/testBearN 已被清零，会把正确的报告覆盖成默认值
+     （实测 bear 恒被写成 1.000）。                                      */
+  if(hammer.phase!==0)return;
+  lastPen=Math.max(hammer.y0-4-hammer.y,0);
+  hammer.y1=hammer.y;
+  hammer.phase=1; hammer.t=0;
+  if(hammer.kind==='test'){
+    testRpt={
+      pen:lastPen,
+      brk:brkCount()-testBrk0,      /* 这一锤新打出来多少断边 = 损伤增量 */
+      E:hamW,                        /* 材料实际吸收的功（花掉的预算） */
+      F:hamFavg,
+      bear:testBearN?testBearSum/testBearN:1,
+      T:hamN?hamT/hamN:0
+    };
+    testBearSum=0;testBearN=0;
+    return;
+  }
+  /* 打不动的原因要分开说，别再拿温度当唯一的替罪羊：
+     承载系数掉下来 = 锤下是裂纹/分层，材料自己就没连上（塌陷）；
+     承载完好却打不进 = 单纯太硬（冷料、淬火件），该回炉。         */
+  if(hamN>0&&lastPen<0.3&&!auto){
+    if(hamBear<0.8)flash('打在缺陷区：塌陷 / 分层张开');
+    else if(hamT/hamN<600)flash('太硬，锤弹开了（先回炉加热）');
+  }
+}
+function updateHammer(simDt){
+  if(!hammer.active)return;
+  /* phase 0（下落/侵入）的动力学在 solveIter 里逐子步积分——那里才有材料抗力。
+     这里只管 phase 1 回程。 */
+  if(hammer.phase!==0){
+    hammer.t+=simDt;
+    const u=clamp(hammer.t/CFG.retractDur,0,1);
+    hammer.y=lerp(hammer.y1,hammer.y0,u);
+    if(u>=1){hammer.active=false;settleFrames=14;}
+  }
+}
+
+/* ==========================================================================
+   6b. 一键演示：热锻 → 淬火 → 冷打弹开 → 回炉 → 再锻 的完整剧本
+   --------------------------------------------------------------------------
+   手动演示要一步步点，展示时容易乱。用一个小状态机把「温度决定可锻性」这条
+   主线串起来自动播放（这是当前动力学锤模型最核心、也最可靠的一条物理通道）：
+     阶段 0  热锻（1150°C）：沿长边 6 锤 → 透入 ~2mm、塑性流动
+     阶段 1  淬火：激冷 → 颜色变暗、材料变硬
+     阶段 2  冷打（中心 3 锤）：透入骤降到 ~0.5mm，锤「打不动」
+     阶段 3  回炉：炉温 1200°C 加热 → 软化、回亮
+     阶段 4  再热锻（中心 4 锤）：又能锻了 —— 温度回来了可锻性就回来
+     阶段 5  收尾
+   与 auto 互斥（同一时刻只跑一个自动剧本），R 重置或「停止」都会清掉。 */
+let showcase=null;
+function startShowcase(){
+  buildAll();
+  CFG.T0=1150; CFG.coolScale=0.8; CFG.furnaceOn=false; CFG.timeScale=0.5;
+  hammer.hx=0; hammer.hz=0;
+  showcase={st:0,t:0,n:0};
+  flash('一键演示：热锻 → 淬火 → 冷打弹开 → 回炉 → 再锻');
+}
+function tickShowcase(dt){
+  const S=showcase; if(!S)return;
+  S.t+=dt;
+  if(S.st===0){                          /* 热锻：沿长边均匀 6 锤，材料可锻 */
+    if(!hammer.active&&S.t>=0.5){
+      if(S.n>=6){S.st=1;S.t=0;quenchT=2.6;CFG.coolScale=30;flash('淬火：激冷 → 材料变硬');return;}
+      hammer.hx=-CFG.Lx*0.36+S.n*(CFG.Lx*0.72/5);
+      hammer.hz=0; doStrike(); S.n++; S.t=0;
+    }
+  }else if(S.st===1){                    /* 淬火：激冷数秒，表面硬化 */
+    if(S.t>=5.0){S.st=2;S.t=0;S.n=0;CFG.coolScale=1;flash('冷打：锤打不动了（透入骤降）');}
+  }else if(S.st===2){                    /* 冷打：中心 3 锤，几乎不留印 */
+    if(!hammer.active&&S.t>=0.5){
+      if(S.n>=3){S.st=3;S.t=0;flash('回炉：加热软化');return;}
+      hammer.hx=0;hammer.hz=0; doStrike(); S.n++; S.t=0;
+    }
+  }else if(S.st===3){                    /* 回炉加热 */
+    CFG.furnaceOn=true; CFG.furnaceT=1200; CFG.furnaceRate=1.5;
+    if(S.t>=5.0){S.st=4;S.t=0;S.n=0;flash('再锻：又能锻了 —— 温度决定可锻性');}
+  }else if(S.st===4){                    /* 再热锻：中心 4 锤 */
+    if(!hammer.active&&S.t>=0.5){
+      if(S.n>=4){S.st=5;S.t=0;return;}
+      hammer.hx=0;hammer.hz=0; doStrike(); S.n++; S.t=0;
+    }
+  }else if(S.st===5){                    /* 收尾 */
+    CFG.furnaceOn=false; CFG.furnaceRate=0.55; CFG.coolScale=0.8;
+    showcase=null; flash('演示结束：空格继续 / R 重置');
+  }
+}
+
+/* ==========================================================================
+   7. 渲染数据
+   ========================================================================== */
+function blackbodyRGB(K){
+  const t=K/100;let r,g,b;
+  if(t<=66)r=255; else r=329.698727446*Math.pow(t-60,-0.1332047592);
+  if(t<=66)g=99.4708025861*Math.log(Math.max(t,1e-3))-161.1195681661;
+  else g=288.1221695283*Math.pow(t-60,-0.0755148492);
+  if(t>=66)b=255; else if(t<=19)b=0; else b=138.5177312231*Math.log(t-10)-305.0447927307;
+  return [clamp(r,0,255)/255,clamp(g,0,255)/255,clamp(b,0,255)/255];
+}
+function ramp(st,t){
+  t=clamp(t,0,1);const n=st.length-1,x=t*n,i=Math.min(n-1,Math.floor(x)),f=x-i,a=st[i],b=st[i+1];
+  return [a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];
+}
+const VIRIDIS=[[0.267,0.005,0.329],[0.229,0.322,0.545],[0.128,0.567,0.551],[0.369,0.789,0.383],[0.993,0.906,0.144]];
+const DAMAGE =[[0.30,0.30,0.33],[0.60,0.48,0.14],[0.96,0.36,0.08],[1.0,0.06,0.03]];
+const DIVERGE=[[0.16,0.38,0.88],[0.62,0.70,0.86],[0.80,0.80,0.82],[0.96,0.62,0.36],[0.90,0.16,0.12]];
+
+let triBuf=null,cntBuf=null,meshBuf=null,idxBuf=null,lineBuf=null,triN=0,lineN=0;
+/* 往裂纹顶点池里塞一个点：位置照抄物理点，法线用面法线（平贴面不能共享点，
+   否则两侧法线一正一反正好抵消，裂纹会渲染成法线≈0 的黑斑）。            */
+function putCrackV(k,pi,nx,ny,nz){
+  const s=crvN+k,s3=s*3,p3=pi*3;
+  crvP[s3]=pos[p3];crvP[s3+1]=pos[p3+1];crvP[s3+2]=pos[p3+2];
+  crvNr[s3]=nx;crvNr[s3+1]=ny;crvNr[s3+2]=nz;
+  crvSrc[s]=pi;
+}
+function updateRender(){
+  nrm.fill(0);pArea.fill(0);pval.fill(0);cntBuf.fill(0);
+  for(let e=0;e<M;e++){
+    if(eBrk[e])continue;
+    let v;
+    if(CFG.colorMode===1)v=eEp[e];
+    else if(CFG.colorMode===2)v=eD[e];
+    else{let q=(0.5*(T[eI[e]]+T[eJ[e]]))|0;if(q<0)q=0;else if(q>=LUTN)q=LUTN-1;
+         v=eSig[e]/Math.max(LUTSY[q],1);}
+    pval[eI[e]]+=v;pval[eJ[e]]+=v;cntBuf[eI[e]]++;cntBuf[eJ[e]]++;
+  }
+  /* ---- 表面提取：渲染所有「胞 ↔（外部 | 已分离邻胞）」之间的面 ----
+     两种界面都会生成面：
+       ① 邻胞不存在（外表面）或已完全脱落  → 单层面，用共享关键点做平滑着色
+       ② 邻胞存在但两者之间的界面已断裂    → 两侧各生成一层，初始完全重合
+          （零间隙 = 两个平贴面），裂纹张开才分离。这样断裂不再让材料凭空
+          消失，体积不会因为「断了几条边」就掉一层壳。
+     内部界面必须各用各的顶点：若两侧共享关键点，法线一正一反会互相抵消，
+     裂纹处会变成法线≈0 的黑斑。独立顶点还顺带给出平整的解理面法线。     */
+  faceN=0; surfFlag.fill(0); crvN=0; crvQ=0;
+  for(let c=0;c<NC;c++){
+    const o3=c*3;let x=0,y=0,z=0;
+    for(let q=0;q<8;q++){const pp=cellV[8*c+q]*3;x+=pos[pp];y+=pos[pp+1];z+=pos[pp+2];}
+    cellC[o3]=x*0.125;cellC[o3+1]=y*0.125;cellC[o3+2]=z*0.125;
+  }
+  triN=0;
+  const cf=CFG.crackFace, cK=CFG.crackK;
+  for(let c=0;c<NC;c++){
+    if(cellGone[c])continue;                       /* 完全粉碎 → 真的脱落飞走 */
+    if(cellDead[c]&&!CFG.spallShow)continue;        /* 部分开裂的料仍在原位 */
+    const cc3=c*3;
+    for(let s2=0;s2<6;s2++){
+      const nb=cellNB[c*6+s2];
+      let split=0;                                  /* 1 = 内部界面，对侧也会画 */
+      if(nb>=0){
+        if(cellGone[nb]||(cellDead[nb]&&!CFG.spallShow)){ /* 邻胞不渲染 → 单层面 */ }
+        else{
+          /* 界面是否已裂开：该面 4 条边里断掉 >= crackK 条 */
+          const fe=FACE_E[s2], eb=c*12; let n=0;
+          if(cf)for(let q=0;q<4;q++)if(eBrk[cellE[eb+fe[q]]])n++;
+          if(n<cK)continue;                         /* 完好 → 共享面，不生成 */
+          split=1;
+        }
+      }
+      if(faceN>=MAXF)break;
+      const o=c*24+s2*4;
+      let a=cellF[o],b=cellF[o+1],cc=cellF[o+2],d=cellF[o+3];
+      const ax=pos[a*3],ay=pos[a*3+1],az=pos[a*3+2];
+      const ux=pos[b*3]-ax,uy=pos[b*3+1]-ay,uz=pos[b*3+2]-az;
+      const vx=pos[cc*3]-ax,vy=pos[cc*3+1]-ay,vz=pos[cc*3+2]-az;
+      const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+      /* 外向参考：内部面指向邻居胞心，外部面指向自己的面心 */
+      let ox,oy,oz;
+      if(nb>=0){ox=cellC[nb*3]-cellC[cc3];oy=cellC[nb*3+1]-cellC[cc3+1];oz=cellC[nb*3+2]-cellC[cc3+2];}
+      else{
+        ox=(ax+pos[b*3]+pos[cc*3]+pos[d*3])*0.25-cellC[cc3];
+        oy=(ay+pos[b*3+1]+pos[cc*3+1]+pos[d*3+1])*0.25-cellC[cc3+1];
+        oz=(az+pos[b*3+2]+pos[cc*3+2]+pos[d*3+2])*0.25-cellC[cc3+2];
+      }
+      if(nx*ox+ny*oy+nz*oz<0){const t2=b;b=d;d=t2;}   /* 反转绕序，法线朝外 */
+      const a3=a*3,b3=b*3,c3=cc*3,d3=d*3;
+      const e1x=pos[b3]-ax,e1y=pos[b3+1]-ay,e1z=pos[b3+2]-az;
+      const e2x=pos[c3]-ax,e2y=pos[c3+1]-ay,e2z=pos[c3+2]-az;
+      const fx=e1y*e2z-e1z*e2y,fy=e1z*e2x-e1x*e2z,fz=e1x*e2y-e1y*e2x;
+      const flen=Math.sqrt(fx*fx+fy*fy+fz*fz)||1;
+      /* 裂纹面用独立顶点：4 个点各自一份，法线取面法线（解理面本来就是平的），
+         于是两侧平贴时互相不干扰，张开时两侧各自受光、明暗分明。          */
+      let ia=a,ib=b,ic=cc,id=d;
+      if(split&&crvN+4<=MAXCQ*4){
+        ia=N+crvN;ib=N+crvN+1;ic=N+crvN+2;id=N+crvN+3;
+        putCrackV(0,a,fx/flen,fy/flen,fz/flen);putCrackV(1,b,fx/flen,fy/flen,fz/flen);
+        putCrackV(2,cc,fx/flen,fy/flen,fz/flen);putCrackV(3,d,fx/flen,fy/flen,fz/flen);
+        crvN+=4;crvQ++;
+      }else{
+        nrm[a3]+=fx;nrm[a3+1]+=fy;nrm[a3+2]+=fz;
+        nrm[b3]+=fx;nrm[b3+1]+=fy;nrm[b3+2]+=fz;
+        nrm[c3]+=fx;nrm[c3+1]+=fy;nrm[c3+2]+=fz;
+        nrm[d3]+=fx;nrm[d3+1]+=fy;nrm[d3+2]+=fz;
+      }
+      triBuf[triN++]=ia;triBuf[triN++]=ib;triBuf[triN++]=ic;
+      triBuf[triN++]=ia;triBuf[triN++]=ic;triBuf[triN++]=id;
+      faceQ[faceN*4]=a;faceQ[faceN*4+1]=b;faceQ[faceN*4+2]=cc;faceQ[faceN*4+3]=d;faceN++;
+      surfFlag[a]=1;surfFlag[b]=1;surfFlag[cc]=1;surfFlag[d]=1;
+      const ar=flen*0.5;
+      pArea[a]+=ar*0.5;pArea[b]+=ar*0.5;pArea[cc]+=ar*0.5;pArea[d]+=ar*0.5;
+    }
+  }
+  for(let i=0;i<N;i++){
+    const i3=i*3,l=Math.hypot(nrm[i3],nrm[i3+1],nrm[i3+2])||1;
+    nrm[i3]/=l;nrm[i3+1]/=l;nrm[i3+2]/=l;
+    if(cntBuf[i]>0)pval[i]/=cntBuf[i];
+    shade(T[i],pval[i],_sh);
+    /* 已开裂的料：往氧化皮暗色压，并掐掉自发光（裂开的部分不再整体导热，
+       红得比周围慢）—— 这样碎裂区看得见，但体积并没有消失。            */
+    const dm=(pDead&&CFG.spallDim>0)?pDead[i]*CFG.spallDim:0;
+    if(dm>0){
+      _sh[0]*=1-dm*0.62;_sh[1]*=1-dm*0.66;_sh[2]*=1-dm*0.70;
+      _sh[3]*=1-dm*0.9;
+    }
+    pcol[i3]=_sh[0];pcol[i3+1]=_sh[1];pcol[i3+2]=_sh[2];pemis[i]=_sh[3];
+  }
+}
+/* 温度 / 塑性 / 损伤 / 应力 → 颜色 + 自发光。物理网格与重建表面共用。 */
+const _sh=new Float64Array(4);
+function shade(tc,val,o){
+  let r,g,b,em=0;
+  if(CFG.colorMode===0){
+    const hf=smoothstep(430,880,tc),bb=blackbodyRGB(tc+273.15);
+    const oxf=smoothstep(350,900,tc);
+    const b0=lerp(0.30,0.17,oxf),b1=lerp(0.31,0.16,oxf),b2=lerp(0.34,0.16,oxf);
+    r=lerp(b0,bb[0]*0.75,hf);g=lerp(b1,bb[1]*0.75,hf);b=lerp(b2,bb[2]*0.75,hf);
+    em=hf*Math.pow(clamp((tc-420)/950,0,1),1.4)*2.6;
+  }else if(CFG.colorMode===1){const c=ramp(VIRIDIS,clamp(val/1.2,0,1));r=c[0];g=c[1];b=c[2];}
+  else if(CFG.colorMode===2){const c=ramp(DAMAGE,val);r=c[0];g=c[1];b=c[2];}
+  else{const c=ramp(DIVERGE,0.5+0.5*clamp(val/2,-1,1));r=c[0];g=c[1];b=c[2];}
+  o[0]=r;o[1]=g;o[2]=b;o[3]=em;
+}
+function uploadMesh(){
+  if(!gl)return;
+  for(let i=0;i<N;i++){
+    const o=i*10,i3=i*3;
+    meshBuf[o]=pos[i3];meshBuf[o+1]=pos[i3+1];meshBuf[o+2]=pos[i3+2];
+    meshBuf[o+3]=nrm[i3];meshBuf[o+4]=nrm[i3+1];meshBuf[o+5]=nrm[i3+2];
+    meshBuf[o+6]=pcol[i3];meshBuf[o+7]=pcol[i3+1];meshBuf[o+8]=pcol[i3+2];
+    meshBuf[o+9]=pemis[i];
+  }
+  /* 裂纹平贴面顶点：位置/法线已自带，颜色取对应物理点的着色再压暗一档
+     （解理面是没有氧化皮的新断口，且缝隙里照不到光）。                    */
+  const kd2=1-CFG.crackDim*0.55;
+  for(let s=0;s<crvN;s++){
+    const o=(N+s)*10,s3=s*3,pi=crvSrc[s],p3=pi*3;
+    meshBuf[o]=crvP[s3];meshBuf[o+1]=crvP[s3+1];meshBuf[o+2]=crvP[s3+2];
+    meshBuf[o+3]=crvNr[s3];meshBuf[o+4]=crvNr[s3+1];meshBuf[o+5]=crvNr[s3+2];
+    meshBuf[o+6]=pcol[p3]*kd2;meshBuf[o+7]=pcol[p3+1]*kd2;meshBuf[o+8]=pcol[p3+2]*kd2;
+    meshBuf[o+9]=pemis[pi]*0.35;
+  }
+  for(let i=0;i<MAXF*6;i++)idxBuf[i]=i<triN?triBuf[i]:0;
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboMesh);gl.bufferSubData(gl.ARRAY_BUFFER,0,meshBuf);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,iboMesh);gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER,0,idxBuf);
+}
+/* ==========================================================================
+   7b. 独立渲染表面：关键点 → 核密度场 → SurfaceNets
+   物理网格（六面体胞 + 边）是「判断器」，直接拿来当渲染网格有三个毛病：
+     ① 表面只能是胞的六个面 → 台阶状，分辨率被物理网格绑死
+     ② 剥落 / 断裂只能靠「删面」表达 → 做不出折叠、焊合、融合这类拓扑变化
+     ③ 渲染分辨率与物理分辨率耦合，想看光滑表面就得把物理网格加到跑不动
+   这里改成：把活胞的关键点（胞心）当成 metaball 中心，splat 一个紧支撑核
+   密度场，再用 SurfaceNets 抽 iso 面。于是
+     · 表面质量由渲染分辨率决定，与物理网格解耦，可单独调粗细
+     · 折叠 / 锻接时两部分靠近 → 场自然融合 → 视觉上真的焊在一起
+     · 剥落表现为表面凹陷，而不是破洞
+   ========================================================================== */
+const SFCN=[[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,1],[1,0,1],[1,1,1],[0,1,1]];
+const SFCE=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+/* 体素棱 (P → P+e_d) 周围 4 个 cell 的偏移；按此绕序 quad 法线 = +e_d */
+const SFQO=[
+  [[0,0,0],[0,-1,0],[0,-1,-1],[0,0,-1]],
+  [[0,0,0],[0,0,-1],[-1,0,-1],[-1,0,0]],
+  [[0,0,0],[-1,0,0],[-1,-1,0],[0,-1,0]]
+];
+const SFD=[[1,0,0],[0,1,0],[0,0,1]];
+let SF=null,SFCAP=0;
+let vboSurf=null,iboSurf=null,surfBuf=null,surfIdx=null,surfVN=0,surfIN=0,surfTick=0;
+function allocSurf(n){
+  SFCAP=n;
+  SF={GX:0,GY:0,GZ:0,ox:0,oy:0,oz:0,h:1,
+    f:new Float32Array(n), w:new Float32Array(n), aT:new Float32Array(n), aV:new Float32Array(n),
+    vIdx:new Int32Array(n),
+    vx:new Float32Array(n*3), vn:new Float32Array(n*3), vc:new Float32Array(n*3), ve:new Float32Array(n),
+    tx:new Float32Array(n*3)};
+  surfBuf=new Float32Array(n*10);
+  surfIdx=new Uint32Array(n*18);
+  if(gl){
+    if(!vboSurf){vboSurf=gl.createBuffer();iboSurf=gl.createBuffer();}
+    gl.bindBuffer(gl.ARRAY_BUFFER,vboSurf);gl.bufferData(gl.ARRAY_BUFFER,n*10*4,gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,iboSurf);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,n*18*4,gl.DYNAMIC_DRAW);
+  }
+}
+const SFpv=new Float64Array(8),SFid=[0,0,0,0];
+function buildSurface(){
+  if(!cellDead||!NC)return;
+  /* --- 1. 活胞包围盒 + 等效胞边长 --- */
+  let x0=1e9,y0=1e9,z0=1e9,x1=-1e9,y1=-1e9,z1=-1e9,nv=0,esum=0;
+  for(let c=0;c<NC;c++){
+    if(cellDead[c])continue; nv++;
+    for(let q=0;q<8;q++){const pp=cellV[8*c+q]*3;
+      if(pos[pp]<x0)x0=pos[pp]; if(pos[pp]>x1)x1=pos[pp];
+      if(pos[pp+1]<y0)y0=pos[pp+1]; if(pos[pp+1]>y1)y1=pos[pp+1];
+      if(pos[pp+2]<z0)z0=pos[pp+2]; if(pos[pp+2]>z1)z1=pos[pp+2];}
+    const b=cellV[8*c]*3;
+    const q1=cellV[8*c+1]*3,q3=cellV[8*c+3]*3,q4=cellV[8*c+4]*3;
+    esum+=(Math.hypot(pos[q1]-pos[b],pos[q1+1]-pos[b+1],pos[q1+2]-pos[b+2])
+          +Math.hypot(pos[q3]-pos[b],pos[q3+1]-pos[b+1],pos[q3+2]-pos[b+2])
+          +Math.hypot(pos[q4]-pos[b],pos[q4+1]-pos[b+1],pos[q4+2]-pos[b+2]))/3;
+  }
+  if(!nv){surfVN=0;surfIN=0;return;}
+  const rad=CFG.surfR*(esum/nv);                 /* 核影响半径 ∝ 胞尺寸 */
+  const sx=Math.max(x1-x0,1e-3),sy=Math.max(y1-y0,1e-3),sz=Math.max(z1-z0,1e-3);
+  let h=Math.cbrt(sx*sy*sz/CFG.surfRes),GX,GY,GZ,PAD=2;
+  for(let it=0;it<24;it++){                      /* 按总格点预算反解体素尺寸 */
+    PAD=Math.ceil(rad/h)+1;
+    GX=Math.ceil(sx/h)+1+2*PAD;GY=Math.ceil(sy/h)+1+2*PAD;GZ=Math.ceil(sz/h)+1+2*PAD;
+    if(GX*GY*GZ<=CFG.surfRes)break;
+    h*=1.15;
+  }
+  const nc=GX*GY*GZ;
+  if(nc>SFCAP||!SF)allocSurf(Math.max(nc,2048));
+  SF.GX=GX;SF.GY=GY;SF.GZ=GZ;SF.h=h;
+  const ox=x0-PAD*h, oy=y0-PAD*h, oz=z0-PAD*h;
+  SF.ox=ox;SF.oy=oy;SF.oz=oz;
+  const f=SF.f,w=SF.w,aT=SF.aT,aV=SF.aV,vIdx=SF.vIdx,vx=SF.vx,vn=SF.vn,vc=SF.vc,ve=SF.ve;
+  f.fill(0);w.fill(0);aT.fill(0);aV.fill(0);
+  /* --- 2. splat：w(q)=(1−q²)³ 紧支撑核，同时带温度/显示值做加权累加 --- */
+  const r2=rad*rad;
+  for(let c=0;c<NC;c++){
+    if(cellDead[c])continue;
+    const cx=cellC[c*3],cy=cellC[c*3+1],cz=cellC[c*3+2];
+    const i0=Math.max(0,Math.ceil((cx-rad-ox)/h)),i1=Math.min(GX-1,Math.floor((cx+rad-ox)/h));
+    const j0=Math.max(0,Math.ceil((cy-rad-oy)/h)),j1=Math.min(GY-1,Math.floor((cy+rad-oy)/h));
+    const k0=Math.max(0,Math.ceil((cz-rad-oz)/h)),k1=Math.min(GZ-1,Math.floor((cz+rad-oz)/h));
+    let Tc=0,Vc=0;
+    for(let q=0;q<8;q++){const pp=cellV[8*c+q];Tc+=T[pp];Vc+=pval[pp];}
+    Tc*=0.125;Vc*=0.125;
+    for(let k=k0;k<=k1;k++){const dz=oz+k*h-cz,dz2=dz*dz;
+      for(let j=j0;j<=j1;j++){const dy=oy+j*h-cy,d2=dz2+dy*dy; if(d2>=r2)continue;
+        const row=GX*(j+GY*k);
+        for(let i=i0;i<=i1;i++){const dx=ox+i*h-cx,dd=d2+dx*dx; if(dd>=r2)continue;
+          const q=1-dd/r2,ww=q*q*q,id=i+row;
+          f[id]+=ww;w[id]+=ww;aT[id]+=ww*Tc;aV[id]+=ww*Vc;
+        }}}
+  }
+  /* --- 3. 自适应 iso：平面表面处的场值恰好是内部的一半（对称性），
+            所以取「关键点处场值均值 × 0.5」正好让表面穿过最外层关键点。 --- */
+  let sum=0,ns=0;
+  for(let c=0;c<NC;c++){
+    if(cellDead[c])continue;
+    const i=Math.round((cellC[c*3]-ox)/h),j=Math.round((cellC[c*3+1]-oy)/h),k=Math.round((cellC[c*3+2]-oz)/h);
+    if(i<0||i>=GX||j<0||j>=GY||k<0||k>=GZ)continue;
+    sum+=f[i+GX*(j+GY*k)];ns++;
+  }
+  const iso=(ns?sum/ns:1)*CFG.surfIso;
+  /* --- 4. SurfaceNets：每个跨 iso 的 cell 放一个顶点（12 条棱交点的质心） --- */
+  vIdx.fill(-1);
+  let vn_=0;
+  for(let cz=0;cz<GZ-1;cz++)for(let cy=0;cy<GY-1;cy++)for(let cx=0;cx<GX-1;cx++){
+    let m=0;
+    for(let q=0;q<8;q++){
+      const i=cx+SFCN[q][0],j=cy+SFCN[q][1],k=cz+SFCN[q][2];
+      const v=f[i+GX*(j+GY*k)]; SFpv[q]=v;
+      if(v>iso)m|=1<<q;
+    }
+    if(m===0||m===255)continue;
+    let ax=0,ay=0,az=0,cnt=0;
+    for(let q=0;q<12;q++){
+      const p=SFCE[q][0],r=SFCE[q][1],vp=SFpv[p],vr=SFpv[r];
+      if((vp>iso)===(vr>iso))continue;
+      const t=(iso-vp)/(vr-vp);
+      ax+=cx+SFCN[p][0]+(SFCN[r][0]-SFCN[p][0])*t;
+      ay+=cy+SFCN[p][1]+(SFCN[r][1]-SFCN[p][1])*t;
+      az+=cz+SFCN[p][2]+(SFCN[r][2]-SFCN[p][2])*t;
+      cnt++;
+    }
+    if(!cnt)continue;
+    const id=cx+GX*(cy+GY*cz);
+    vIdx[id]=vn_;
+    vx[vn_*3]=ox+ax/cnt*h; vx[vn_*3+1]=oy+ay/cnt*h; vx[vn_*3+2]=oz+az/cnt*h;
+    const ww=w[id];
+    if(ww>1e-9)shade(aT[id]/ww,aV[id]/ww,_sh); else shade(20,0,_sh);
+    vc[vn_*3]=_sh[0];vc[vn_*3+1]=_sh[1];vc[vn_*3+2]=_sh[2];ve[vn_]=_sh[3];
+    /* 法线 = 密度场负梯度（指向密度减小的方向 = 外向） */
+    const gx=f[Math.min(GX-1,cx+1)+GX*(cy+GY*cz)]-f[Math.max(0,cx-1)+GX*(cy+GY*cz)];
+    const gy=f[cx+GX*(Math.min(GY-1,cy+1)+GY*cz)]-f[cx+GX*(Math.max(0,cy-1)+GY*cz)];
+    const gz=f[cx+GX*(cy+GY*Math.min(GZ-1,cz+1))]-f[cx+GX*(cy+GY*Math.max(0,cz-1))];
+    const l=Math.hypot(gx,gy,gz)||1;
+    vn[vn_*3]=-gx/l;vn[vn_*3+1]=-gy/l;vn[vn_*3+2]=-gz/l;
+    vn_++;
+  }
+  /* --- 5. 体素网格上的拉普拉斯平滑（规则网格，6 邻域） --- */
+  const sm=CFG.surfSmooth|0;
+  if(sm>0&&vn_>2){
+    const tx=SF.tx;
+    for(let it=0;it<sm;it++){
+      tx.set(vx.subarray(0,vn_*3));
+      for(let cz=0;cz<GZ-1;cz++)for(let cy=0;cy<GY-1;cy++)for(let cx=0;cx<GX-1;cx++){
+        const vi=vIdx[cx+GX*(cy+GY*cz)]; if(vi<0)continue;
+        let sx=0,sy=0,sz=0,n=0;
+        for(let d=0;d<3;d++)for(let s=-1;s<=1;s+=2){
+          const px=cx+(d===0?s:0),py=cy+(d===1?s:0),pz=cz+(d===2?s:0);
+          if(px<0||px>=GX-1||py<0||py>=GY-1||pz<0||pz>=GZ-1)continue;
+          const ni=vIdx[px+GX*(py+GY*pz)]; if(ni<0)continue;
+          sx+=tx[ni*3];sy+=tx[ni*3+1];sz+=tx[ni*3+2];n++;
+        }
+        if(n){const k=0.55;
+          vx[vi*3]=tx[vi*3]*(1-k)+sx/n*k;
+          vx[vi*3+1]=tx[vi*3+1]*(1-k)+sy/n*k;
+          vx[vi*3+2]=tx[vi*3+2]*(1-k)+sz/n*k;}
+      }
+    }
+  }
+  /* --- 6. quad：每条跨 iso 的体素棱，用环绕它的 4 个 cell 顶点拼一个四边形 --- */
+  let in_=0,cap=surfIdx.length;
+  for(let cz=0;cz<GZ;cz++)for(let cy=0;cy<GY;cy++)for(let cx=0;cx<GX;cx++){
+    const v0=f[cx+GX*(cy+GY*cz)];
+    for(let d=0;d<3;d++){
+      const o=SFD[d],nx=cx+o[0],ny=cy+o[1],nz=cz+o[2];
+      if(nx>=GX||ny>=GY||nz>=GZ)continue;
+      const v1=f[nx+GX*(ny+GY*nz)];
+      if((v0>iso)===(v1>iso))continue;
+      const qo=SFQO[d];
+      let ok=true;
+      for(let q=0;q<4;q++){
+        const px=cx+qo[q][0],py=cy+qo[q][1],pz=cz+qo[q][2];
+        if(px<0||px>=GX-1||py<0||py>=GY-1||pz<0||pz>=GZ-1){ok=false;break;}
+        const vi=vIdx[px+GX*(py+GY*pz)]; if(vi<0){ok=false;break;}
+        SFid[q]=vi;
+      }
+      if(!ok||in_+6>cap)continue;
+      /* 绕序 (0,1,2,3) 的法线 = +e_d；棱起点在内侧时外向就是 +e_d */
+      if(v0>iso){
+        surfIdx[in_++]=SFid[0];surfIdx[in_++]=SFid[1];surfIdx[in_++]=SFid[2];
+        surfIdx[in_++]=SFid[0];surfIdx[in_++]=SFid[2];surfIdx[in_++]=SFid[3];
+      }else{
+        surfIdx[in_++]=SFid[0];surfIdx[in_++]=SFid[3];surfIdx[in_++]=SFid[2];
+        surfIdx[in_++]=SFid[0];surfIdx[in_++]=SFid[2];surfIdx[in_++]=SFid[1];
+      }
+    }
+  }
+  surfVN=vn_;surfIN=in_;
+}
+function uploadSurf(){
+  if(!gl||!surfBuf||surfVN<=0)return;
+  for(let i=0;i<surfVN;i++){
+    const o=i*10,i3=i*3;
+    surfBuf[o]  =SF.vx[i3];  surfBuf[o+1]=SF.vx[i3+1];surfBuf[o+2]=SF.vx[i3+2];
+    surfBuf[o+3]=SF.vn[i3];  surfBuf[o+4]=SF.vn[i3+1];surfBuf[o+5]=SF.vn[i3+2];
+    surfBuf[o+6]=SF.vc[i3];  surfBuf[o+7]=SF.vc[i3+1];surfBuf[o+8]=SF.vc[i3+2];
+    surfBuf[o+9]=SF.ve[i];
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboSurf);
+  gl.bufferSubData(gl.ARRAY_BUFFER,0,surfBuf,0,surfVN*10);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,iboSurf);
+  gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER,0,surfIdx,0,surfIN);
+}
+function uploadLines(){
+  if(!gl)return;
+  let n=0;
+  for(let e=0;e<M;e++){
+    const a=eI[e],b=eJ[e];
+    if(CFG.edgeSurfOnly&&!(surfFlag[a]||surfFlag[b]))continue;
+    let c;
+    if(eBrk[e])c=[0.8,0.1,0.1];
+    else if(CFG.edgeMode===0){
+      const Te=0.5*(T[a]+T[b]);
+      const s=eSig[e]/Math.max(syOf(Te)*(1+2.5*0.5*(xi[a]+xi[b])),1);
+      c=ramp(DIVERGE,0.5+0.5*clamp(s/2,-1,1));
+    }else c=ramp(DAMAGE,eD[e]);
+    lineBuf[n++]=pos[a*3];lineBuf[n++]=pos[a*3+1];lineBuf[n++]=pos[a*3+2];
+    lineBuf[n++]=c[0];lineBuf[n++]=c[1];lineBuf[n++]=c[2];
+    lineBuf[n++]=pos[b*3];lineBuf[n++]=pos[b*3+1];lineBuf[n++]=pos[b*3+2];
+    lineBuf[n++]=c[0];lineBuf[n++]=c[1];lineBuf[n++]=c[2];
+  }
+  lineN=n/6;
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboLine);gl.bufferSubData(gl.ARRAY_BUFFER,0,lineBuf);
+}
+
+/* ==========================================================================
+   8. WebGL
+   ========================================================================== */
+const canvas=document.getElementById('gl');
+const gl=canvas.getContext('webgl2',{antialias:true,alpha:false});
+if(!gl){const e=document.getElementById('err');e.style.display='flex';
+  e.textContent='需要 WebGL2（请用较新的 Chrome / Edge / Firefox）';}
+
+const VS_MESH=`attribute vec3 aPos;attribute vec3 aNrm;attribute vec3 aCol;attribute float aEmis;
+uniform mat4 uMVP;varying vec3 vN;varying vec3 vC;varying vec3 vP;varying float vE;
+void main(){vN=aNrm;vC=aCol;vE=aEmis;vP=aPos;gl_Position=uMVP*vec4(aPos,1.0);}`;
+const FS_MESH=`precision mediump float;uniform vec3 uEye;
+varying vec3 vN;varying vec3 vC;varying vec3 vP;varying float vE;
+void main(){
+  vec3 N=normalize(vN); if(dot(N,N)<0.5)N=vec3(0.0,1.0,0.0);
+  vec3 V=normalize(uEye-vP);
+  vec3 L1=normalize(vec3(0.45,0.85,0.55)),L2=normalize(vec3(-0.7,0.35,-0.5));
+  float d1=max(dot(N,L1),0.0),d2=max(dot(N,L2),0.0)*0.32;
+  vec3 col=vC*(0.20+d1*0.85+d2);
+  col+=vec3(pow(max(dot(N,normalize(L1+V)),0.0),42.0)*0.30);
+  col+=vC*vE;
+  gl_FragColor=vec4(pow(clamp(col,0.0,1.7),vec3(0.92)),1.0);
+}`;
+const VS_LINE=`attribute vec3 aPos;attribute vec3 aCol;uniform mat4 uMVP;varying vec3 vC;
+void main(){vC=aCol;gl_PointSize=3.0;gl_Position=uMVP*vec4(aPos,1.0);}`;
+const FS_LINE=`precision mediump float;varying vec3 vC;void main(){gl_FragColor=vec4(vC,1.0);}`;
+
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+  if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(o));return o;}
+function mkp(vs,fs){const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,vs));
+  gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))console.error(gl.getProgramInfoLog(p));return p;}
+
+/* 顶点属性状态机。
+   WebGL 规定：已启用的属性数组在每次 draw 时都必须绑着足够大的缓冲，否则
+   产生 INVALID_OPERATION 并**静默丢弃这次绘制**。两个 program 的 location
+   会重叠（pMesh 用 0..3，pLine 只用 0..1），画完工件后 2、3 号属性仍指向
+   vboCube（仅 360 float），接着画地面/线框就越界 —— 地面和线框会整块消失。
+   所以切换 program 时显式关掉对方多出来的属性槽。                        */
+function attrOnly(keep){
+  for(let i=0;i<4;i++) if(keep.indexOf(i)<0) gl.disableVertexAttribArray(i);
+}
+
+let pMesh,pLine,LM={},LL={};
+let vboMesh,iboMesh,vboLine,vboGround,vboCube,vboAnvil=null;
+let anvilWLast=-1,anvilDLast=-1;   /* 砧面尺寸变了才重建顶点缓冲 */
+function allocGLBuffers(){
+  if(!gl)return;
+  if(vboMesh){gl.deleteBuffer(vboMesh);gl.deleteBuffer(iboMesh);gl.deleteBuffer(vboLine);}
+  vboMesh=gl.createBuffer();iboMesh=gl.createBuffer();vboLine=gl.createBuffer();
+  const RV=N+MAXCQ*4;                       /* 顶点区 = 物理点 + 裂纹平贴面独立顶点 */
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboMesh);gl.bufferData(gl.ARRAY_BUFFER,RV*10*4,gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,iboMesh);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,MAXF*6*4,gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboLine);gl.bufferData(gl.ARRAY_BUFFER,M*2*6*4,gl.DYNAMIC_DRAW);
+  triBuf=new Int32Array(MAXF*6);cntBuf=new Float64Array(N);
+  meshBuf=new Float32Array(RV*10);idxBuf=new Uint32Array(MAXF*6);lineBuf=new Float32Array(M*2*6);
+  if(!vboGround){
+    vboGround=gl.createBuffer();
+    const a=[];
+    for(let i=-8;i<=8;i++)a.push(i*15,-0.02,-120,i*15,-0.02,120);
+    for(let i=-8;i<=8;i++)a.push(-120,-0.02,i*15,120,-0.02,i*15);
+    gl.bindBuffer(gl.ARRAY_BUFFER,vboGround);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(a),gl.STATIC_DRAW);
+    vboCube=gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER,vboCube);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(cubeData()),gl.STATIC_DRAW);
+  }
+}
+function cubeData(){
+  const F=[
+    [[0,0,1],[1,0,1],[1,1,1],[0,1,1],[0,0,1]],
+    [[1,0,0],[0,0,0],[0,1,0],[1,1,0],[0,0,-1]],
+    [[1,0,1],[1,0,0],[1,1,0],[1,1,1],[1,0,0]],
+    [[0,0,0],[0,0,1],[0,1,1],[0,1,0],[-1,0,0]],
+    [[0,1,1],[1,1,1],[1,1,0],[0,1,0],[0,1,0]],
+    [[0,0,0],[1,0,0],[1,0,1],[0,0,1],[0,-1,0]]
+  ];
+  const out=[],col=[0.42,0.43,0.46];
+  for(const f of F){const n=f[4],v=f.slice(0,4);
+    for(const i of [0,1,2,0,2,3])out.push(v[i][0],v[i][1],v[i][2],n[0],n[1],n[2],col[0],col[1],col[2],0);}
+  return out;
+}
+function initGL(){
+  pMesh=mkp(VS_MESH,FS_MESH);pLine=mkp(VS_LINE,FS_LINE);
+  LM.aPos=gl.getAttribLocation(pMesh,'aPos');LM.aNrm=gl.getAttribLocation(pMesh,'aNrm');
+  LM.aCol=gl.getAttribLocation(pMesh,'aCol');LM.aEmis=gl.getAttribLocation(pMesh,'aEmis');
+  LM.uMVP=gl.getUniformLocation(pMesh,'uMVP');LM.uEye=gl.getUniformLocation(pMesh,'uEye');
+  LL.aPos=gl.getAttribLocation(pLine,'aPos');LL.aCol=gl.getAttribLocation(pLine,'aCol');
+  LL.uMVP=gl.getUniformLocation(pLine,'uMVP');
+  gl.enable(gl.DEPTH_TEST);
+}
+
+/* 相机 */
+let camYaw=0.78,camPitch=0.40,camDist=200,camTarget=[0,12,0];
+let dragging=0,lastX=0,lastY=0,downX=0,downY=0,moved=false;
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('mousedown',e=>{
+  dragging=(e.button===2||e.shiftKey)?2:1;lastX=e.clientX;lastY=e.clientY;
+  downX=e.clientX;downY=e.clientY;moved=false;
+});
+canvas.addEventListener('mousemove',e=>{
+  if(!dragging)return;
+  const dx=e.clientX-lastX,dy=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;
+  if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+  if(dragging===2){
+    const s=camDist*0.0016;
+    camTarget[0]-=dx*Math.cos(camYaw)*s; camTarget[2]-=dx*Math.sin(camYaw)*s; camTarget[1]+=dy*s;
+  }else{camYaw-=dx*0.006;camPitch=clamp(camPitch-dy*0.006,-1.45,1.45);}
+});
+window.addEventListener('mouseup',e=>{
+  if(dragging===1&&!moved&&e.target===canvas)pickHammer(e.clientX,e.clientY);
+  dragging=0;
+});
+canvas.addEventListener('wheel',e=>{e.preventDefault();camDist=clamp(camDist*Math.exp(e.deltaY*0.0012),40,900);},{passive:false});
+const camPos=()=>{const cp=Math.cos(camPitch);
+  return [camTarget[0]+camDist*cp*Math.cos(camYaw),camTarget[1]+camDist*Math.sin(camPitch),
+          camTarget[2]+camDist*cp*Math.sin(camYaw)];};
+
+/* 矩阵（列主序） */
+const m4=()=>new Float32Array(16);
+function perspective(o,fovy,asp,n,f){const t=1/Math.tan(fovy/2);
+  o.fill(0);o[0]=t/asp;o[5]=t;o[10]=(f+n)/(n-f);o[11]=-1;o[14]=2*f*n/(n-f);return o;}
+function lookAt(o,ex,ey,ez,cx,cy,cz,ux,uy,uz){
+  let zx=ex-cx,zy=ey-cy,zz=ez-cz,l=Math.hypot(zx,zy,zz)||1;zx/=l;zy/=l;zz/=l;
+  let xx=uy*zz-uz*zy,xy=uz*zx-ux*zz,xz=ux*zy-uy*zx;l=Math.hypot(xx,xy,xz)||1;xx/=l;xy/=l;xz/=l;
+  const yx=zy*xz-zz*xy,yy=zz*xx-zx*xz,yz=zx*xy-zy*xx;
+  o[0]=xx;o[1]=yx;o[2]=zx;o[3]=0;o[4]=xy;o[5]=yy;o[6]=zy;o[7]=0;o[8]=xz;o[9]=yz;o[10]=zz;o[11]=0;
+  o[12]=-(xx*ex+xy*ey+xz*ez);o[13]=-(yx*ex+yy*ey+yz*ez);o[14]=-(zx*ex+zy*ey+zz*ez);o[15]=1;return o;
+}
+function mul(o,a,b){ /* o=a*b，o 不能与 a/b 同一数组 */
+  for(let c=0;c<4;c++)for(let r=0;r<4;r++)
+    o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];
+  return o;
+}
+function invert(m,o){
+  const a00=m[0],a01=m[1],a02=m[2],a03=m[3],a10=m[4],a11=m[5],a12=m[6],a13=m[7],
+        a20=m[8],a21=m[9],a22=m[10],a23=m[11],a30=m[12],a31=m[13],a32=m[14],a33=m[15];
+  const b00=a00*a11-a01*a10,b01=a00*a12-a02*a10,b02=a00*a13-a03*a10,b03=a01*a12-a02*a11,
+        b04=a01*a13-a03*a11,b05=a02*a13-a03*a12,b06=a20*a31-a21*a30,b07=a20*a32-a22*a30,
+        b08=a20*a33-a23*a30,b09=a21*a32-a22*a31,b10=a21*a33-a23*a31,b11=a22*a33-a23*a32;
+  let d=b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;
+  if(!d)return o; d=1/d;
+  o[0]=(a11*b11-a12*b10+a13*b09)*d;o[1]=(a02*b10-a01*b11-a03*b09)*d;
+  o[2]=(a31*b05-a32*b04+a33*b03)*d;o[3]=(a22*b04-a21*b05-a23*b03)*d;
+  o[4]=(a12*b08-a10*b11-a13*b07)*d;o[5]=(a00*b11-a02*b08+a03*b07)*d;
+  o[6]=(a32*b02-a30*b05-a33*b01)*d;o[7]=(a20*b05-a22*b02+a23*b01)*d;
+  o[8]=(a10*b10-a11*b08+a13*b06)*d;o[9]=(a01*b08-a00*b10-a03*b06)*d;
+  o[10]=(a30*b04-a31*b02+a33*b00)*d;o[11]=(a21*b02-a20*b04-a23*b00)*d;
+  o[12]=(a11*b07-a10*b09-a12*b06)*d;o[13]=(a00*b09-a01*b07+a02*b06)*d;
+  o[14]=(a31*b01-a30*b03-a32*b00)*d;o[15]=(a20*b03-a21*b01+a22*b00)*d;
+  return o;
+}
+const MP=m4(),MV=m4(),VP=m4(),IVP=m4(),MM=m4();
+
+function draw(){
+  if(!gl)return;
+  const w=canvas.clientWidth|0,h=canvas.clientHeight|0,dpr=Math.min(window.devicePixelRatio||1,2);
+  if(canvas.width!==(w*dpr|0)||canvas.height!==(h*dpr|0)){canvas.width=w*dpr|0;canvas.height=h*dpr|0;}
+  gl.viewport(0,0,canvas.width,canvas.height);
+  gl.clearColor(0.055,0.063,0.075,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const eye=camPos();
+  perspective(MP,50*Math.PI/180,canvas.width/Math.max(canvas.height,1),1,4000);
+  lookAt(MV,eye[0],eye[1],eye[2],camTarget[0],camTarget[1],camTarget[2],0,1,0);
+  mul(VP,MP,MV); invert(VP,IVP);
+
+  /* 地面（纯位置，颜色用常量属性） */
+  gl.useProgram(pLine);gl.uniformMatrix4fv(LL.uMVP,false,VP);
+  attrOnly([LL.aPos]);
+  gl.bindBuffer(gl.ARRAY_BUFFER,vboGround);
+  gl.enableVertexAttribArray(LL.aPos);gl.vertexAttribPointer(LL.aPos,3,gl.FLOAT,false,0,0);
+  gl.vertexAttrib3f(LL.aCol,0.17,0.19,0.22);
+  gl.drawArrays(gl.LINES,0,68);
+
+  /* 砧面轮廓：有限砧面开启时画出真正有支撑的区域，踩空的地方一眼能看出来 */
+  if(CFG.anvilFinite>0){
+    const w=CFG.anvilW*0.5,d=CFG.anvilD*0.5;
+    if(!vboAnvil)vboAnvil=gl.createBuffer();
+    if(w!==anvilWLast||d!==anvilDLast){
+      anvilWLast=w;anvilDLast=d;
+      const a=[],n2=10;
+      for(let i=0;i<=n2;i++){const u=-w+2*w*i/n2;a.push(u,0,-d,u,0,d);}
+      for(let i=0;i<=n2;i++){const v=-d+2*d*i/n2;a.push(-w,0,v,w,0,v);}
+      gl.bindBuffer(gl.ARRAY_BUFFER,vboAnvil);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(a),gl.DYNAMIC_DRAW);
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER,vboAnvil);
+    gl.enableVertexAttribArray(LL.aPos);gl.vertexAttribPointer(LL.aPos,3,gl.FLOAT,false,0,0);
+    gl.vertexAttrib3f(LL.aCol,0.46,0.49,0.55);
+    gl.drawArrays(gl.LINES,0,44);
+  }
+
+  /* 工件：surfMode=0 画物理网格；否则画重建表面（顶点格式一致，共用 program） */
+  gl.useProgram(pMesh);gl.uniformMatrix4fv(LM.uMVP,false,VP);
+  gl.uniform3f(LM.uEye,eye[0],eye[1],eye[2]);
+  attrOnly([LM.aPos,LM.aNrm,LM.aCol,LM.aEmis]);
+  const useSurf=(CFG.surfMode!==0)&&surfIN>0;
+  gl.bindBuffer(gl.ARRAY_BUFFER,useSurf?vboSurf:vboMesh);
+  gl.enableVertexAttribArray(LM.aPos);gl.vertexAttribPointer(LM.aPos,3,gl.FLOAT,false,40,0);
+  gl.enableVertexAttribArray(LM.aNrm);gl.vertexAttribPointer(LM.aNrm,3,gl.FLOAT,false,40,12);
+  gl.enableVertexAttribArray(LM.aCol);gl.vertexAttribPointer(LM.aCol,3,gl.FLOAT,false,40,24);
+  gl.enableVertexAttribArray(LM.aEmis);gl.vertexAttribPointer(LM.aEmis,1,gl.FLOAT,false,40,36);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,useSurf?iboSurf:iboMesh);
+  gl.drawElements(gl.TRIANGLES,useSurf?surfIN:triN,gl.UNSIGNED_INT,0);
+
+  /* 锤（带倾角的错切模型矩阵） */
+  if(CFG.showHammer){
+    const tn=Math.tan(CFG.tilt*Math.PI/180),hy=hammer.active?hammer.y:topUnderHammer()+4;
+    MM[0]=CFG.hW;MM[1]=tn*CFG.hW;MM[2]=0;MM[3]=0;
+    MM[4]=0;MM[5]=34;MM[6]=0;MM[7]=0;
+    MM[8]=0;MM[9]=0;MM[10]=CFG.hD;MM[11]=0;
+    MM[12]=hammer.hx-CFG.hW*0.5;MM[13]=hy-tn*CFG.hW*0.5;MM[14]=hammer.hz-CFG.hD*0.5;MM[15]=1;
+    gl.uniformMatrix4fv(LM.uMVP,false,mul(_tmpM,VP,MM));
+    gl.bindBuffer(gl.ARRAY_BUFFER,vboCube);
+    gl.vertexAttribPointer(LM.aPos,3,gl.FLOAT,false,40,0);
+    gl.vertexAttribPointer(LM.aNrm,3,gl.FLOAT,false,40,12);
+    gl.vertexAttribPointer(LM.aCol,3,gl.FLOAT,false,40,24);
+    gl.vertexAttribPointer(LM.aEmis,1,gl.FLOAT,false,40,36);
+    gl.drawArrays(gl.TRIANGLES,0,36);
+    gl.uniformMatrix4fv(LM.uMVP,false,VP);
+  }
+  /* 边 / 点 */
+  if(CFG.showEdges||CFG.showPoints){
+    gl.useProgram(pLine);gl.uniformMatrix4fv(LL.uMVP,false,VP);
+    attrOnly([LL.aPos,LL.aCol]);
+    gl.bindBuffer(gl.ARRAY_BUFFER,vboLine);
+    gl.enableVertexAttribArray(LL.aPos);gl.vertexAttribPointer(LL.aPos,3,gl.FLOAT,false,24,0);
+    gl.enableVertexAttribArray(LL.aCol);gl.vertexAttribPointer(LL.aCol,3,gl.FLOAT,false,24,12);
+    if(CFG.showEdges)gl.drawArrays(gl.LINES,0,lineN);
+    if(CFG.showPoints)gl.drawArrays(gl.POINTS,0,lineN);
+  }
+}
+const _tmpM=m4();
+
+/* 拾取：射线-三角求交 */
+function pickHammer(mx,my){
+  const r=canvas.getBoundingClientRect();
+  const nx=((mx-r.left)/r.width)*2-1, ny=1-((my-r.top)/r.height)*2;
+  const un=v=>{const w=IVP[3]*v[0]+IVP[7]*v[1]+IVP[11]*v[2]+IVP[15];
+    return [(IVP[0]*v[0]+IVP[4]*v[1]+IVP[8]*v[2]+IVP[12])/w,
+            (IVP[1]*v[0]+IVP[5]*v[1]+IVP[9]*v[2]+IVP[13])/w,
+            (IVP[2]*v[0]+IVP[6]*v[1]+IVP[10]*v[2]+IVP[14])/w];};
+  const A=un([nx,ny,-1,1]),B=un([nx,ny,1,1]);
+  let d=[B[0]-A[0],B[1]-A[1],B[2]-A[2]];
+  const dl=Math.hypot(d[0],d[1],d[2])||1;d=[d[0]/dl,d[1]/dl,d[2]/dl];
+  let best=1e18,bp=null;
+  /* 拾取要跟随当前显示的表面：重建表面模式下对 SurfaceNets 顶点求交，
+     否则对物理网格的可见面求交。                                        */
+  const useSurf=(CFG.surfMode!==0)&&surfIN>0;
+  const nTri=useSurf?surfIN/3:faceN*2;
+  let V0,V1,V2;
+  for(let ti=0;ti<nTri;ti++){
+    if(useSurf){
+      const a=surfIdx[ti*3],b=surfIdx[ti*3+1],c=surfIdx[ti*3+2];
+      V0=[SF.vx[a*3],SF.vx[a*3+1],SF.vx[a*3+2]];
+      V1=[SF.vx[b*3],SF.vx[b*3+1],SF.vx[b*3+2]];
+      V2=[SF.vx[c*3],SF.vx[c*3+1],SF.vx[c*3+2]];
+    }else{
+      const f=ti>>1, q=[faceQ[4*f],faceQ[4*f+1],faceQ[4*f+2],faceQ[4*f+3]];
+      const it=(ti&1)?[0,2,3]:[0,1,2];
+      const p0=q[it[0]]*3,p1=q[it[1]]*3,p2=q[it[2]]*3;
+      V0=[pos[p0],pos[p0+1],pos[p0+2]];
+      V1=[pos[p1],pos[p1+1],pos[p1+2]];
+      V2=[pos[p2],pos[p2+1],pos[p2+2]];
+    }
+    {
+      const v0=V0,v1=V1,v2=V2;
+      const e1=[v1[0]-v0[0],v1[1]-v0[1],v1[2]-v0[2]],e2=[v2[0]-v0[0],v2[1]-v0[1],v2[2]-v0[2]];
+      const h=[d[1]*e2[2]-d[2]*e2[1],d[2]*e2[0]-d[0]*e2[2],d[0]*e2[1]-d[1]*e2[0]];
+      const a=e1[0]*h[0]+e1[1]*h[1]+e1[2]*h[2];
+      if(Math.abs(a)<1e-9)continue;
+      const fi=1/a,s=[A[0]-v0[0],A[1]-v0[1],A[2]-v0[2]];
+      const u=fi*(s[0]*h[0]+s[1]*h[1]+s[2]*h[2]);
+      if(u<0||u>1)continue;
+      const qv=[s[1]*e1[2]-s[2]*e1[1],s[2]*e1[0]-s[0]*e1[2],s[0]*e1[1]-s[1]*e1[0]];
+      const v=fi*(d[0]*qv[0]+d[1]*qv[1]+d[2]*qv[2]);
+      if(v<0||u+v>1)continue;
+      const t=fi*(e2[0]*qv[0]+e2[1]*qv[1]+e2[2]*qv[2]);
+      if(t>1e-4&&t<best){best=t;bp=[A[0]+d[0]*t,A[1]+d[1]*t,A[2]+d[2]*t];}
+    }
+  }
+  if(bp){hammer.hx=bp[0];hammer.hz=bp[2];return;}
+  const t=(CFG.Ly*0.5-A[1])/(Math.abs(d[1])<1e-6?1e-6:d[1]);
+  if(t>0){hammer.hx=clamp(A[0]+d[0]*t,-CFG.Lx,CFG.Lx);hammer.hz=clamp(A[2]+d[2]*t,-CFG.Lz,CFG.Lz);}
+}
+
+/* ==========================================================================
+   9. HUD
+   ========================================================================== */
+const fx=(x,n)=>x.toFixed(n===undefined?1:n);
+let flashMsg='',flashT=-1e9;
+function flash(m){flashMsg=m;flashT=performance.now();}
+function updateHUD(fps){
+  let vtot=0;
+  for(let t=0;t<NT;t++)vtot+=tetVol(tv[4*t],tv[4*t+1],tv[4*t+2],tv[4*t+3]);
+  let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9,mnz=1e9,mxz=-1e9,tmax=-1e9,tsum=0,nan=false;
+  for(let i=0;i<N;i++){
+    const x=pos[i*3],y=pos[i*3+1],z=pos[i*3+2];
+    if(!isFinite(x)||!isFinite(y)||!isFinite(z)){nan=true;break;}
+    if(x<mnx)mnx=x;if(x>mxx)mxx=x;if(y<mny)mny=y;if(y>mxy)mxy=y;if(z<mnz)mnz=z;if(z>mxz)mxz=z;
+    if(T[i]>tmax)tmax=T[i];tsum+=T[i];
+  }
+  /* 底面/顶面均温：砧面导热是否真的把温度场拉歪了，看这两个数的差 */
+  let tbot=0,ttop=0,nb=0,nt=0;
+  if(CFG.anvilCool>0){
+    const hh=Math.max(mxy-mny,1e-6);
+    for(let i=0;i<N;i++){
+      const yy=pos[i*3+1];
+      if(yy<mny+hh*0.25){tbot+=T[i];nb++;}
+      else if(yy>mxy-hh*0.25){ttop+=T[i];nt++;}
+    }
+    if(nb)tbot/=nb; if(nt)ttop/=nt;
+  }
+  let brk=0,epmax=0,capL=0,capF=0;
+  for(let e=0;e<M;e++){
+    if(eBrk[e])brk++; if(eEp[e]>epmax)epmax=eEp[e];
+    const ae=eAe[e]; capF+=ae;
+    capL+=ae*(eBrk[e]?CFG.contactK:(1-eD[e]));
+  }
+  const bearAll=capF>0?capL/capF:1;   /* 整体承载系数：锻件的「完好度 / 锻合质量」 */
+  let dead=0,gone=0; for(let c=0;c<NC;c++){if(cellDead[c])dead++;if(cellGone[c])gone++;}
+  const dev=(vtot/totalV0-1)*100;
+  document.getElementById('hud').innerHTML=
+   `<div>体积 <b>${fx(vtot/1000,2)}</b> cm³ &nbsp;偏差 `+
+   `<span class="${Math.abs(dev)>4?'warn':''}">${dev>=0?'+':''}${fx(dev,2)}%</span></div>`+
+   `<div>外形 <b>${fx(mxx-mnx)}</b> × ${fx(mxy-mny)} × ${fx(mxz-mnz)} mm</div>`+
+   `<div>温度 峰 <b>${fx(tmax,0)}</b> / 均 ${fx(tsum/N,0)} °C ${quenchT>0?'<span style="color:#6cc">[淬火中]</span>':''}</div>`+
+   (CFG.anvilCool>0?`<div>砧面 <b style="color:${anvilT>300?'#e6a23c':'#9ab'}">${fx(anvilT,0)}</b> °C &nbsp;底面 <b>${fx(tbot,0)}</b> / 顶面 <b>${fx(ttop,0)}</b> °C</div>`:'')+
+   `<div>锤击 <b>${hammerCount}</b> &nbsp;εp<sub>max</sub> <b>${fx(epmax,2)}</b> &nbsp;`+
+   `上一锤透入 <b style="color:${lastPen<0.3?'#e6a23c':'#7ee2a8'}">${fx(lastPen,2)}</b> mm &nbsp;`+
+   `锤力 <b>${fx(hamFavg/1000,0)}</b> kN`+
+   (CFG.cThick>0?` &nbsp;c <b>${fx(hamC,2)}</b> &nbsp;锤下厚 <b>${fx(hamH,1)}</b>mm`:'')+`<br>`+
+   `断边 <span class="${brk?'warn':''}">${brk}</span>/${M} &nbsp;`+
+   `焊合 <span style="color:#6c9">${weldCount}</span> &nbsp;`+
+   `整体承载 <span style="color:${bearAll<0.9?'#e6a23c':'#7ee2a8'}">${fx(bearAll*100,1)}</span>%</div>`+
+   `<div>网格 ${CFG.nx}×${CFG.ny}×${CFG.nz} &nbsp;点 ${N} · 边 ${M} · 体元 ${NT}</div>`+
+   `<div>可见面 <b>${faceN}</b> &nbsp;剥落胞 <span class="${dead?'warn':''}">${dead}</span>/${NC}`+
+   (CFG.crackFace?` &nbsp;裂纹面 <b>${crvQ}</b>`:'')+
+   (gone?` &nbsp;脱落 <span class="warn">${gone}</span>`:'')+`</div>`+
+   (CFG.surfMode!==0?`<div>重建表面 <b>${surfVN}</b> 点 / ${surfIN/3} 三角</div>`:'')+
+   `<div>${fx(fps,0)} fps &nbsp;求解 ${fx(solveMs,1)} ms</div>`+
+   (testRpt?`<div style="color:#9cf">冲击测试 → 透入 <b>${fx(testRpt.pen,2)}</b>mm · `+
+   (testRpt.brk>0?`新增断边 <b style="color:#e6a23c">${testRpt.brk}</b>`:
+    testRpt.brk<0?`焊合 <b style="color:#6c9">${-testRpt.brk}</b> 条边`:`无新增断边`)+
+   ` · 吸能 <b>${fx(testRpt.E/1000,0)}</b> J · 锤下承载 <b style="color:${testRpt.bear<0.9?'#e6a23c':'#7ee2a8'}">${fx(testRpt.bear*100,0)}</b>% · ${fx(testRpt.T,0)}°C</div>`:'')+
+   (nan?'<div class="warn">⚠ 数值发散 —— 按 R 重置，并调低步长 α / 压深</div>':'')+
+   (performance.now()-flashT<2600?`<div style="color:#7ee2a8">${flashMsg}</div>`:'');
+}
+
+/* ==========================================================================
+   10. 主循环
+   ========================================================================== */
+let last=performance.now(),fpsAcc=60;
+function frame(now){
+  const dtReal=Math.min(0.05,(now-last)/1000);last=now;
+  fpsAcc=lerp(fpsAcc,1/Math.max(dtReal,1e-3),0.1);
+  if(gl&&isFinite(pos[0])){
+    buildLUT();
+    stepThermal(dtReal);
+    const simDt=dtReal*CFG.timeScale;
+    updateHammer(simDt);
+    if(showcase)tickShowcase(dtReal);
+    if(!showcase&&auto&&!hammer.active){
+      /* 淬火阶段：先把工件激冷到室温（产生马氏体相变残余应力），再开始锤击。
+         这正是「淬火后直接锤击会脆裂」的场景。                            */
+      if(auto.q>0){
+        /* 第一帧触发游戏内置淬火（quenchT 让冷速 ×22，带表芯温差与相变应力） */
+        if(auto.q===auto.qMax)quenchT=2.6;
+        auto.q--;
+        if(auto.q===0){CFG.coolScale=auto.cool0;auto.wait=0.3;}
+      }else{
+        auto.wait-=dtReal;
+        if(auto.wait<=0){
+          if(auto.mode==='draw')hammer.hx=-CFG.Lx*0.36+(auto.i%9)*(CFG.Lx*0.72/8);
+          else hammer.hx=0;
+          hammer.hz=0; doStrike(); auto.n--; auto.i++; auto.wait=0.42;
+          if(auto.n<=0)auto=null;
+        }
+      }
+    }
+    if(ptElist)pointCompress();          /* 断口接触与补边都要用局部致密程度 */
+    const iters=(hammer.active||settleFrames>0)?CFG.iters:4;
+    const dtIt=Math.max(simDt,1e-4)/iters;
+    const t0=performance.now();
+    for(let k=0;k<iters;k++)solveIter(dtIt,hammer.active);
+    solveMs=lerp(solveMs,performance.now()-t0,0.15);
+    if(!hammer.active&&settleFrames>0)settleFrames--;
+    if(CFG.weldOn)healEdges(false);
+    updateCellDead();
+    updateRender();
+    uploadMesh();
+    if(CFG.surfMode!==0){
+      surfTick++;
+      if(surfTick%CFG.surfEvery===0||surfVN===0){buildSurface();uploadSurf();}
+    }
+    if(CFG.showEdges||CFG.showPoints)uploadLines();
+  }
+  draw();
+  updateHUD(fpsAcc);
+  requestAnimationFrame(frame);
+}
+
+/* ==========================================================================
+   11. 控制面板
+   ========================================================================== */
+function mkSec(p,title,open){
+  const d=document.createElement('details');d.open=!!open;
+  const s=document.createElement('summary');s.textContent=title;d.appendChild(s);
+  const b=document.createElement('div');b.className='body';d.appendChild(b);p.appendChild(d);return b;
+}
+function mkSlider(p,label,min,max,step,get,set,f){
+  const r=document.createElement('div');r.className='row';
+  const l=document.createElement('label');l.textContent=label;
+  const i=document.createElement('input');i.type='range';i.min=min;i.max=max;i.step=step;i.value=get();
+  const v=document.createElement('span');v.className='val';v.textContent=f(get());
+  i.oninput=()=>{const x=parseFloat(i.value);set(x);v.textContent=f(x);};
+  r.append(l,i,v);p.appendChild(r);
+}
+function mkChk(p,label,get,set){
+  const r=document.createElement('label');r.className='chk';
+  const i=document.createElement('input');i.type='checkbox';i.checked=get();
+  i.onchange=()=>set(i.checked);
+  const s=document.createElement('span');s.textContent=label;
+  r.append(i,s);p.appendChild(r);
+}
+function mkBtn(p,label,fn,pri){
+  const b=document.createElement('button');b.textContent=label;
+  if(pri)b.className='pri';b.onclick=fn;p.appendChild(b);return b;
+}
+function mkRow(p){const d=document.createElement('div');d.className='btns';p.appendChild(d);return d;}
+function buildPanel(){
+  const C=document.getElementById('controls');C.innerHTML='';
+  const f0=x=>fx(x,0),f1=x=>fx(x,1),f2=x=>fx(x,2),f4=x=>fx(x,4);
+
+  let s=mkSec(C,'操作',true);
+  let r=mkRow(s);
+  mkBtn(r,'锤击 (空格)',()=>doStrike(),true);
+  mkBtn(r,'松弛',()=>{settleFrames=60;});
+  r=mkRow(s);
+  mkBtn(r,'自动拔长',()=>{auto={mode:'draw',n:18,i:0,wait:0};showcase=null;});
+  mkBtn(r,'自动镦粗',()=>{auto={mode:'upset',n:12,i:0,wait:0};showcase=null;});
+  mkBtn(r,'停止',()=>{auto=null;showcase=null;});
+  r=mkRow(s);mkBtn(r,'▶ 一键演示',()=>startShowcase(),true);
+  r=mkRow(s);mkBtn(r,'重置 (R)',()=>buildAll());
+  r=mkRow(s);
+  /* 冲击测试：同一套动力学、同一个 F=3σy_eff·A·bear，只是不计数、出报告。
+     用途是量「锻完的件抗不抗打」——锻合不良（分层/未融合）的件 bear 低，
+     同一把锤会陷得更深、打出更多断边，读数上直接看得见差别。          */
+  mkBtn(r,'冲击测试 (T)',()=>doStrike('test'));
+  mkBtn(r,'清测试报告',()=>{testRpt=null;});
+
+  s=mkSec(C,'锤头',true);
+  mkSlider(s,'宽度(沿X) mm',6,70,1,()=>CFG.hW,x=>CFG.hW=x,f0);
+  mkSlider(s,'进深(沿Z) mm',10,90,1,()=>CFG.hD,x=>CFG.hD=x,f0);
+  mkSlider(s,'锤头质量 kg',5,80,1,()=>CFG.hMass,x=>CFG.hMass=x,f0);
+  mkSlider(s,'锤击速度 m/s',1,12,0.5,()=>CFG.hSpeed,x=>CFG.hSpeed=x,f1);
+  mkSlider(s,'下压速率 mm/s',5,120,5,()=>CFG.hVMax,x=>CFG.hVMax=x,f0);
+  mkSlider(s,'行程上限 mm',0.3,8,0.1,()=>CFG.depth,x=>CFG.depth=x,f1);
+  mkChk(s,'厚度约束 c(h/2a)',()=>CFG.cThick>0,x=>CFG.cThick=x?1:0);
+  mkSlider(s,'薄件 c 上限',3,12,0.5,()=>CFG.cMax,x=>CFG.cMax=x,f1);
+  mkSlider(s,'锤面倾角 °',-25,25,1,()=>CFG.tilt,x=>CFG.tilt=x,f0);
+  mkSlider(s,'慢放倍率',0.05,1.5,0.05,()=>CFG.timeScale,x=>CFG.timeScale=x,f2);
+  mkSlider(s,'锤面摩擦',0,1,0.05,()=>CFG.fricHammer,x=>CFG.fricHammer=x,f2);
+
+  s=mkSec(C,'温度',true);
+  mkChk(s,'炉中加热 (F)',()=>CFG.furnaceOn,x=>CFG.furnaceOn=x);
+  mkSlider(s,'炉温 °C',600,1400,10,()=>CFG.furnaceT,x=>CFG.furnaceT=x,f0);
+  mkSlider(s,'加热速率',0.05,3,0.05,()=>CFG.furnaceRate,x=>CFG.furnaceRate=x,f2);
+  mkSlider(s,'冷却倍率',0,4,0.05,()=>CFG.coolScale,x=>CFG.coolScale=x,f2);
+  mkSlider(s,'塑性功产热×',0,10,0.5,()=>CFG.heatMult,x=>CFG.heatMult=x,f1);
+  r=mkRow(s);
+  mkBtn(r,'淬火 (Q)',()=>{quenchT=2.6;});
+  mkBtn(r,'回炉',()=>{CFG.furnaceOn=true;document.querySelectorAll('#controls input[type=checkbox]')[0].checked=true;});
+  const lg=document.createElement('div');
+  lg.innerHTML='<div class="legend"></div><div class="legendlbl"><span>500°C</span><span>900</span><span>1200</span><span>1500</span></div>';
+  s.appendChild(lg);
+
+  s=mkSec(C,'砧面',false);
+  mkChk(s,'砧面导热',()=>CFG.anvilCool>0,x=>CFG.anvilCool=x?1:0);
+  mkSlider(s,'砧面初温 °C',0,400,10,()=>CFG.anvilT0,x=>CFG.anvilT0=x,f0);
+  mkSlider(s,'静置换热 W/mm²K',0,0.02,0.0005,()=>CFG.anvilH,x=>CFG.anvilH=x,f4);
+  mkSlider(s,'锤压时换热 ×',1,40,1,()=>CFG.anvilHammer,x=>CFG.anvilHammer=x,f0);
+  mkSlider(s,'砧热容 kJ/K',10,300,10,()=>CFG.anvilC/1000,x=>CFG.anvilC=x*1000,f0);
+  mkChk(s,'有限砧面',()=>CFG.anvilFinite>0,x=>CFG.anvilFinite=x?1:0);
+  mkSlider(s,'砧面宽(X) mm',40,260,5,()=>CFG.anvilW,x=>CFG.anvilW=x,f0);
+  mkSlider(s,'砧面深(Z) mm',40,260,5,()=>CFG.anvilD,x=>CFG.anvilD=x,f0);
+  r=mkRow(s);
+  mkBtn(r,'冷砧',()=>{anvilT=CFG.anvilT0;});
+
+  s=mkSec(C,'材料',false);
+  mkSlider(s,'σy(常温) MPa',100,900,10,()=>CFG.sy0,x=>CFG.sy0=x,f0);
+  mkSlider(s,'E(常温) MPa',80000,250000,5000,()=>CFG.E0,x=>CFG.E0=x,f0);
+  mkSlider(s,'硬化 H MPa',0,2500,50,()=>CFG.H0,x=>CFG.H0=x,f0);
+  mkSlider(s,'冷脆延性 εf',0.03,0.6,0.01,()=>CFG.duct,x=>CFG.duct=x,f2);
+  mkSlider(s,'剥落阈值(断边/12)',1,12,1,()=>CFG.spallK,x=>CFG.spallK=x,f0);
+  /* 碎料是否还占体积：关掉会让已剥落区域随整体压缩一起塌陷（体积会丢），
+     但表面看起来更「干净」。留作排查/风格开关。                          */
+  mkChk(s,'碎料占体积',()=>!!CFG.spallVol,x=>CFG.spallVol=x?1:0);
+
+  s=mkSec(C,'断裂 / 裂纹面',false);
+  /* 断边是「删面」还是「裂成两个平贴面」：关掉就退回旧行为（胞一死整层不画）。 */
+  mkChk(s,'断裂=两侧平贴面',()=>!!CFG.crackFace,x=>CFG.crackFace=x?1:0);
+  mkSlider(s,'裂纹判据(断边/4)',1,4,1,()=>CFG.crackK,x=>CFG.crackK=x,f0);
+  mkChk(s,'开裂料保留渲染',()=>!!CFG.spallShow,x=>CFG.spallShow=x?1:0);
+  mkSlider(s,'完全脱落阈值(13=永不)',6,13,1,()=>CFG.spallDrop,x=>CFG.spallDrop=x,x=>x>=13?'永不':f0(x));
+  mkSlider(s,'裂口暗度',0,1,0.05,()=>CFG.crackDim,x=>CFG.crackDim=x,f2);
+  mkSlider(s,'碎裂区暗度',0,1,0.05,()=>CFG.spallDim,x=>CFG.spallDim=x,f2);
+
+  s=mkSec(C,'补边 / 锻接',false);
+  mkChk(s,'启用补边（断边重连）',()=>CFG.weldOn,x=>CFG.weldOn=x);
+  mkSlider(s,'焊合温度 °C',400,1400,25,()=>CFG.weldT,x=>CFG.weldT=x,f0);
+  mkSlider(s,'间隙容差',0,0.5,0.01,()=>CFG.weldGap,x=>CFG.weldGap=x,f2);
+  mkSlider(s,'所需压缩速率',0,0.01,0.0002,()=>CFG.weldRate,x=>CFG.weldRate=x,x=>fx(x,4));
+  mkSlider(s,'持续帧数',1,60,1,()=>CFG.weldHold,x=>CFG.weldHold=x,f0);
+  mkSlider(s,'焊合残余损伤',0,0.9,0.05,()=>CFG.weldD,x=>CFG.weldD=x,f2);
+  mkSlider(s,'断口接触刚度',0,1,0.05,()=>CFG.contactK,x=>CFG.contactK=x,f2);
+  r=mkRow(s);
+  mkBtn(r,'强制焊合全部',()=>{const n=weldAll();flash(`已焊合 ${n} 条边`);});
+  mkBtn(r,'清零损伤',()=>{eD.fill(0);eBrk.fill(0);eWeld.fill(0);flash('损伤已清零');});
+  const wn=document.createElement('div');wn.className='note';
+  wn.innerHTML='断边在「高温 + 断口重新贴合 + 局部受压」三条件同时成立并持续若干帧后重连'+
+    '—— 锻焊的物理本质。焊合区残留损伤、背应力清零，但塑性记忆 L<sub>p</sub> 保留（形状不跳变）。'+
+    '重连后胞恢复参与体积约束，体积不再单调缩小。';
+  s.appendChild(wn);
+
+  s=mkSec(C,'求解',false);
+  mkSlider(s,'每帧迭代',4,80,2,()=>CFG.iters,x=>CFG.iters=x,f0);
+  mkSlider(s,'步长 α',0.1,1.2,0.05,()=>CFG.alpha,x=>CFG.alpha=x,f2);
+  mkSlider(s,'动量 β',0,0.97,0.01,()=>CFG.beta,x=>CFG.beta=x,f2);
+  mkSlider(s,'体积约束',0,1,0.05,()=>CFG.volRelax,x=>CFG.volRelax=x,f2);
+  mkSlider(s,'砧面摩擦',0,1,0.05,()=>CFG.fricAnvil,x=>CFG.fricAnvil=x,f2);
+  mkSlider(s,'塑性速率 γ',5,300,5,()=>CFG.gamma,x=>CFG.gamma=x,f0);
+  mkSlider(s,'单步应变限',0.005,0.08,0.005,()=>CFG.maxdEp,x=>CFG.maxdEp=x,x=>fx(x,3));
+  mkSlider(s,'压缩愈合',0,1,0.05,()=>CFG.heal,x=>CFG.heal=x,x=>fx(x,2));
+
+  s=mkSec(C,'网格 / 分辨率',false);
+  const res=(label,nx,ny,nz)=>{const b=document.createElement('button');
+    b.textContent=label;b.onclick=()=>{CFG.nx=nx;CFG.ny=ny;CFG.nz=nz;buildAll();};return b;};
+  r=mkRow(s);
+  r.appendChild(res('低 12×4×5',12,4,5));
+  r.appendChild(res('中 18×5×6',18,5,6));
+  r.appendChild(res('高 26×7×8',26,7,8));
+  r=mkRow(s);
+  r.appendChild(res('超高 34×9×10',34,9,10));
+  r.appendChild(res('细长 30×4×5',30,4,5));
+  r.appendChild(res('厚块 14×9×9',14,9,9));
+
+  s=mkSec(C,'显示',true);
+  const mkSel=(label,opts,get,set)=>{
+    const row=document.createElement('div');row.className='row';
+    const l=document.createElement('label');l.textContent=label;
+    const se=document.createElement('select');
+    opts.forEach(o=>{const op=document.createElement('option');op.value=o[1];op.textContent=o[0];se.appendChild(op);});
+    se.value=get();se.onchange=()=>set(parseInt(se.value));
+    row.append(l,se);s.appendChild(row);
+  };
+  mkSel('着色',[['温度(黑体)',0],['塑性应变 εp',1],['损伤 D',2],['应力 σ/σy',3]],()=>CFG.colorMode,x=>CFG.colorMode=x);
+  /* 重建表面是实验路径：顶点落在规则体素网格上，平滑不足时表面会呈明显的
+     体素块状「格子结构」，所以默认物理网格；下面的滑块只在切到重建表面后生效。 */
+  mkSel('表面来源',[['物理网格(默认)',0],['重建表面(实验·有格子感)',1]],()=>CFG.surfMode,x=>{CFG.surfMode=x;surfTick=0;});
+  mkSlider(s,'表面格点预算',3000,60000,1000,()=>CFG.surfRes,x=>CFG.surfRes=x,f0);
+  mkSlider(s,'核半径(×胞边长)',0.7,2.5,0.05,()=>CFG.surfR,x=>CFG.surfR=x,f2);
+  mkSlider(s,'等值面 iso',0.2,1.2,0.02,()=>CFG.surfIso,x=>CFG.surfIso=x,f2);
+  mkSlider(s,'平滑次数',0,4,1,()=>CFG.surfSmooth,x=>CFG.surfSmooth=x,f0);
+  mkSlider(s,'每 N 帧重建',1,6,1,()=>CFG.surfEvery,x=>CFG.surfEvery=x,f0);
+  mkChk(s,'显示网格边',()=>CFG.showEdges,x=>CFG.showEdges=x);
+  mkChk(s,'　只显示表层边',()=>CFG.edgeSurfOnly,x=>CFG.edgeSurfOnly=x);
+  mkChk(s,'显示材料点',()=>CFG.showPoints,x=>CFG.showPoints=x);
+  mkChk(s,'显示锤头',()=>CFG.showHammer,x=>CFG.showHammer=x);
+  mkSel('边着色',[['轴向应力',0],['损伤',1]],()=>CFG.edgeMode,x=>CFG.edgeMode=x);
+
+  const note=document.createElement('div');note.className='note';
+  note.innerHTML='点击工件表面 = 移动锤头。「松弛」= 无载荷继续迭代，'+
+   '看残余应力与形状是否收敛。<br>把「冷却倍率」拉到 0 再连打，可以观察绝热升温。';
+  C.appendChild(note);
+}
+
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if(e.code==='Space'){e.preventDefault();doStrike();}
+  else if(e.key==='t'||e.key==='T')doStrike('test');
+  else if(e.key==='r'||e.key==='R')buildAll();
+  else if(e.key==='q'||e.key==='Q')quenchT=2.6;
+  else if(e.key==='f'||e.key==='F'){CFG.furnaceOn=!CFG.furnaceOn;
+    const c=document.querySelectorAll('#controls input[type=checkbox]');if(c[0])c[0].checked=CFG.furnaceOn;}
+});
+
+/* ==========================================================================
+   12. 启动
+   ========================================================================== */
+if(gl)initGL();
+buildAll();
+buildPanel();
+requestAnimationFrame(frame);
+
+/* 诊断挂钩：把核心变量挂到 window 上，方便用 CDP 抓取诊断信息排查渲染问题 */
+window._diag=()=>({
+  faceN,triN,surfVN,surfIN,surfTick,surfMode:CFG.surfMode,surfEvery:CFG.surfEvery,
+  weldCount,dead:Array.from(cellDead).filter(x=>x).length,N,NC,M,MAXF,
+  glOK:!!gl,glErr:gl?gl.getError():-1,
+  vboMesh:!!vboMesh,vboSurf:!!vboSurf,iboMesh:!!iboMesh,iboSurf:!!iboSurf,
+  canvasW:canvas.width,canvasH:canvas.height,
+  ctxTry:(function(){try{return !!canvas.getContext('webgl2');}catch(e){return e.message;}})(),
+  auto:auto?{mode:auto.mode,n:auto.n,q:auto.q,i:auto.i,wait:+auto.wait.toFixed(2)}:null,
+  tavg:Math.round(Array.from(T).reduce((a,b)=>a+b,0)/N),
+  crvQ,crvN,MAXCQ,gone:Array.from(cellGone).filter(x=>x).length,
+  brk:Array.from(eBrk).filter(x=>x).length,
+  nan:!isFinite(pos[0]),search:location.search,crackFace:CFG.crackFace,
+  url:window.__url||null,
+});
+
+/* URL 参数：
+     ?demo=N  自动连击 N 次（沿长边均匀分布）
+     ?showcase  一键演示剧本（热锻 → 淬火 → 冷打弹开 → 回炉 → 再锻）
+     &T=温度   设初始温度（默认 1150）
+     &K=N     设剥落阈值 1..12（默认 4；1=激进剥落、12=几乎不剥落）
+     &Q=N     先淬火再连击 N 次（看淬火后打不动/弹开）
+     &crack=0 关掉「断裂=两侧平贴面」，退回旧的删面行为
+     &show=0  开裂的料不渲染
+   例：index.html?showcase      →  一键演示「温度决定可锻性」
+     index.html?demo=8&T=20&K=1&phys=1  →  冷打 8 锤 + 激进剥落 + 物理网格
+     index.html?Q=8             →  淬火后锤 8 次（打不动，透入骤降）
+     index.html?Q=8&crack=0     →  同上但用旧行为对比
+                                                                        */
+(function(){
+  const q=location.search; const params={};
+  q.replace(/[?&]([^=&]+)=([^&]*)/g,(_,k,v)=>{params[k]=decodeURIComponent(v);});
+  if('T' in params)CFG.T0=parseFloat(params.T);
+  if('K' in params)CFG.spallK=Math.max(1,Math.min(12,parseInt(params.K)||4));
+  if('phys' in params)CFG.surfMode=0;
+  if('T' in params||'K' in params||'phys' in params)buildAll();
+  const m=q.match(/[?&]demo=(\d+)/);
+  if(m)auto={mode:'draw', n:Math.min(parseInt(m[1],10)||0,12), i:0, wait:0, q:0, cool0:CFG.coolScale};
+  /* &Q=N  先激冷淬火（产生相变残余应力）再连击 N 次 —— 「淬火后直接锤击会脆裂」
+     的场景。也可 &crack=0 关掉平贴面，直接对比旧的「删面」行为。          */
+  const qm=q.match(/[?&]Q=(\d+)/);
+  if(qm){
+    if(!auto)auto={mode:'draw', n:0, i:0, wait:0, q:0, cool0:CFG.coolScale};
+    auto.q=auto.qMax=600; auto.cool0=CFG.coolScale;
+    auto.n=Math.min(parseInt(qm[1],10)||0,20); auto.wait=0.3;
+  }
+  if('crack' in params)CFG.crackFace=parseInt(params.crack)?1:0;
+  if('show' in params)CFG.spallShow=parseInt(params.show)?1:0;
+  if('showcase' in params)startShowcase();
+  window.__url={q,hasQ:!!qm,autoSet:!!auto,autoN:auto?auto.n:-1,autoQ:auto?auto.q:-1};
+})();
+</script>
+</body>
+</html>

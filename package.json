@@ -1,0 +1,24 @@
+{
+  "name": "forge3d",
+  "version": "1.0.0",
+  "description": "硬核拟真打铁原型：边本构 + 局部体积守恒的可锻性物理仿真（单文件 WebGL2 demo）",
+  "main": "index.html",
+  "scripts": {
+    "test": "node smoketest.js",
+    "perf": "node perf.js",
+    "shot": "node cdp_shot.js"
+  },
+  "keywords": [
+    "blacksmithing",
+    "forging",
+    "simulation",
+    "webgl2",
+    "plasticity",
+    "phase-transformation"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ws": "^8.21.3"
+  }
+}

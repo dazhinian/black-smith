@@ -1,0 +1,10 @@
+# 依赖
+node_modules/
+
+# CDP 截图工具生成的浏览器临时 profile（每次跑 cdp_shot.js 都会新生成一个）
+.edge-prof-*/
+
+# 系统 / 编辑器垃圾
+.DS_Store
+Thumbs.db
+*.log
