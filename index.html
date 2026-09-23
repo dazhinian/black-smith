@@ -52,7 +52,7 @@
   <div id="stage" data-page-node-id="gEHtwado0UbW0vvxfrfPiL">
     <canvas id="gl" data-page-node-id="EDVw1PvnCAXTCOamVzI1vu"></canvas>
     <div id="hud" data-page-node-id="GotEj3FnAMxHMv3j29AhIH"></div>
-    <div id="tip" data-page-node-id="KDIkbpZKIlNYw95hCdDOSc">左键拖=旋转 · 滚轮=缩放 · 右键/Shift拖=平移 · 点击工件=移动锤头 · 空格=锤击 · R=重置 · Q=淬火 · F=加热</div>
+    <div id="tip" data-page-node-id="KDIkbpZKIlNYw95hCdDOSc">左键拖=旋转视角 · 滚轮=缩放 · 右键/Shift拖=平移 · 中键拖=移动铁块 · ←→↑↓=移块 · Z/X=偏航 · W/S=俯仰 · A/D=侧倾 · E=翻面 · 空格=锤击 · Q=淬火 · F=加热 · R=重置</div>
     <div id="err" data-page-node-id="x8zZ4g4dxVKq3Mx3WNOH15"></div>
   </div>
   <div id="panel" data-page-node-id="x17oWCV92HCDaBfcNmcsZp">
@@ -864,6 +864,8 @@ function brkCount(){let n=0;for(let e=0;e<M;e++)if(eBrk[e])n++;return n;}
    这样「锻完的件抗不抗打」和「锻的时候好不好打」用的是同一把尺子。   */
 function doStrike(kind){
   if(hammer.active)return;
+  hammer.hx=0;hammer.hz=0;            /* 锤子固定：始终打在砧面中心正上方 */
+  if(!anyUnderHammer())flash('锤下没有料 —— 移动/旋转铁块，把要锻的部位送到锤下');
   const top=topUnderHammer();
   hammer.y0=top+4; hammer.y1=top-CFG.depth;
   hammer.y=hammer.y0; hammer.vy=-CFG.hSpeed*1000;   /* m/s → mm/s */
@@ -916,6 +918,64 @@ function updateHammer(simDt){
 }
 
 /* ==========================================================================
+   6c. 工件姿态：锤子固定不动，玩家移动/旋转铁块，把想锻的部位送到锤下
+   --------------------------------------------------------------------------
+   物理在「世界坐标」里解（砧面/锤/重力都是世界系 -Y），所以移动/旋转就是对
+   全体材料点做刚体变换。刚体变换是等距变换，边长/体积不变，故 eL0/V0/tv0
+   这些参考量统统不用动；断口接触、砧面导热、锤足迹都继续用变换后的 pos。
+   旋转开放全部三轴：yaw（绕竖直 Y）、pitch（绕 X）、roll（绕 Z）。任意倾斜后
+   砧面接触(§4.4 硬地板 y=ySurf)和砧面导热(§5 贴砧判定)本来就只认世界高度，
+   所以料斜着放、架在棱上、立在窄面上都能正常落到砧上——这是真实打铁里楔形、
+   锥形、斜放锻打的前提。每次旋转后 settlePiece() 把最低点落回砧面。         */
+function pieceCenter(){
+  let cx=0,cy=0,cz=0;
+  for(let i=0;i<N;i++){cx+=pos[i*3];cy+=pos[i*3+1];cz+=pos[i*3+2];}
+  return [cx/N,cy/N,cz/N];
+}
+function movePiece(tx,tz){
+  for(let i=0;i<N;i++){
+    const i3=i*3;
+    pos[i3]+=tx; pos[i3+2]+=tz; prevx[i3]+=tx; prevx[i3+2]+=tz;
+  }
+}
+/* 绕当前中心绕 axis 轴转 ang 弧度（axis:'x'|'y'|'z'），转完落到砧面 */
+function rotatePiece(axis,ang){
+  const cc=pieceCenter(),cx=cc[0],cy=cc[1],cz=cc[2];
+  const c=Math.cos(ang),s=Math.sin(ang);
+  const R=(x,y,z)=>{
+    if(axis==='z')return [cx+(x-cx)*c-(y-cy)*s, cy+(x-cx)*s+(y-cy)*c, z];
+    if(axis==='x')return [x, cy+(y-cy)*c-(z-cz)*s, cz+(y-cy)*s+(z-cz)*c];
+    return [cx+(x-cx)*c+(z-cz)*s, y, cz-(x-cx)*s+(z-cz)*c];   /* 'y' */
+  };
+  for(let i=0;i<N;i++){
+    const i3=i*3,r=R(pos[i3],pos[i3+1],pos[i3+2]);
+    pos[i3]=r[0];pos[i3+1]=r[1];pos[i3+2]=r[2];
+    const rp=R(prevx[i3],prevx[i3+1],prevx[i3+2]);
+    prevx[i3]=rp[0];prevx[i3+1]=rp[1];prevx[i3+2]=rp[2];
+  }
+  settlePiece();
+}
+function flipPiece(){ rotatePiece('x',Math.PI); }   /* 翻面 = 绕 X 轴转 180° */
+function settlePiece(){           /* 让最低点贴回砧面 ySurf（旋转/翻面后落位） */
+  let mn=1e9;
+  for(let i=0;i<N;i++)if(pos[i*3+1]<mn)mn=pos[i*3+1];
+  const dy=ySurf-mn;
+  if(dy)for(let i=0;i<N;i++){pos[i*3+1]+=dy;prevx[i*3+1]+=dy;}
+}
+function movePieceTo(cx,cz){      /* 把当前中心平移到世界 (cx,cz) */
+  const c=pieceCenter();
+  movePiece(cx-c[0],cz-c[2]);
+}
+function anyUnderHammer(){
+  const hw=CFG.hW*0.5,hd=CFG.hD*0.5;
+  for(let i=0;i<N;i++){
+    const x=pos[i*3],z=pos[i*3+2];
+    if(x>=-hw&&x<=hw&&z>=-hd&&z<=hd)return true;
+  }
+  return false;
+}
+
+/* ==========================================================================
    6b. 一键演示：热锻 → 淬火 → 冷打弹开 → 回炉 → 再锻 的完整剧本
    --------------------------------------------------------------------------
    手动演示要一步步点，展示时容易乱。用一个小状态机把「温度决定可锻性」这条
@@ -941,15 +1001,15 @@ function tickShowcase(dt){
   if(S.st===0){                          /* 热锻：沿长边均匀 6 锤，材料可锻 */
     if(!hammer.active&&S.t>=0.5){
       if(S.n>=6){S.st=1;S.t=0;quenchT=2.6;CFG.coolScale=30;flash('淬火：激冷 → 材料变硬');return;}
-      hammer.hx=-CFG.Lx*0.36+S.n*(CFG.Lx*0.72/5);
-      hammer.hz=0; doStrike(); S.n++; S.t=0;
+      movePieceTo(CFG.Lx*0.36-S.n*(CFG.Lx*0.72/5),0);   /* 锤固定，移料：长边 6 点依次送到锤下 */
+      doStrike(); S.n++; S.t=0;
     }
   }else if(S.st===1){                    /* 淬火：激冷数秒，表面硬化 */
     if(S.t>=5.0){S.st=2;S.t=0;S.n=0;CFG.coolScale=1;flash('冷打：锤打不动了（透入骤降）');}
   }else if(S.st===2){                    /* 冷打：中心 3 锤，几乎不留印 */
     if(!hammer.active&&S.t>=0.5){
       if(S.n>=3){S.st=3;S.t=0;flash('回炉：加热软化');return;}
-      hammer.hx=0;hammer.hz=0; doStrike(); S.n++; S.t=0;
+      movePieceTo(0,0); doStrike(); S.n++; S.t=0;
     }
   }else if(S.st===3){                    /* 回炉加热 */
     CFG.furnaceOn=true; CFG.furnaceT=1200; CFG.furnaceRate=1.5;
@@ -957,7 +1017,7 @@ function tickShowcase(dt){
   }else if(S.st===4){                    /* 再热锻：中心 4 锤 */
     if(!hammer.active&&S.t>=0.5){
       if(S.n>=4){S.st=5;S.t=0;return;}
-      hammer.hx=0;hammer.hz=0; doStrike(); S.n++; S.t=0;
+      movePieceTo(0,0); doStrike(); S.n++; S.t=0;
     }
   }else if(S.st===5){                    /* 收尾 */
     CFG.furnaceOn=false; CFG.furnaceRate=0.55; CFG.coolScale=0.8;
@@ -1452,12 +1512,23 @@ function initGL(){
 /* 相机 */
 let camYaw=0.78,camPitch=0.40,camDist=200,camTarget=[0,12,0];
 let dragging=0,lastX=0,lastY=0,downX=0,downY=0,moved=false;
+let pieceDrag=false,dragGX=0,dragGZ=0;   /* 中键拖 = 在砧面上移动铁块（锤子固定） */
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('mousedown',e=>{
+  if(e.button===1){                       /* 中键：抓取铁块，在砧面(y=0)上拖动 */
+    e.preventDefault();pieceDrag=true;
+    const gp=groundPoint(e.clientX,e.clientY);dragGX=gp?gp[0]:0;dragGZ=gp?gp[2]:0;
+    return;
+  }
   dragging=(e.button===2||e.shiftKey)?2:1;lastX=e.clientX;lastY=e.clientY;
   downX=e.clientX;downY=e.clientY;moved=false;
 });
 canvas.addEventListener('mousemove',e=>{
+  if(pieceDrag){
+    const gp=groundPoint(e.clientX,e.clientY);
+    if(gp){movePiece(gp[0]-dragGX,gp[2]-dragGZ);dragGX=gp[0];dragGZ=gp[2];}
+    return;
+  }
   if(!dragging)return;
   const dx=e.clientX-lastX,dy=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;
   if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
@@ -1467,7 +1538,7 @@ canvas.addEventListener('mousemove',e=>{
   }else{camYaw-=dx*0.006;camPitch=clamp(camPitch-dy*0.006,-1.45,1.45);}
 });
 window.addEventListener('mouseup',e=>{
-  if(dragging===1&&!moved&&e.target===canvas)pickHammer(e.clientX,e.clientY);
+  if(pieceDrag){pieceDrag=false;return;}
   dragging=0;
 });
 canvas.addEventListener('wheel',e=>{e.preventDefault();camDist=clamp(camDist*Math.exp(e.deltaY*0.0012),40,900);},{passive:false});
@@ -1591,8 +1662,9 @@ function draw(){
 }
 const _tmpM=m4();
 
-/* 拾取：射线-三角求交 */
-function pickHammer(mx,my){
+/* 拾取：屏幕坐标 → 砧面(y=0)上的世界点（中键拖拽移动铁块用）。
+   射线取 IVP 逆投影的近/远两点，与 y=0 平面求交。                        */
+function groundPoint(mx,my){
   const r=canvas.getBoundingClientRect();
   const nx=((mx-r.left)/r.width)*2-1, ny=1-((my-r.top)/r.height)*2;
   const un=v=>{const w=IVP[3]*v[0]+IVP[7]*v[1]+IVP[11]*v[2]+IVP[15];
@@ -1600,47 +1672,10 @@ function pickHammer(mx,my){
             (IVP[1]*v[0]+IVP[5]*v[1]+IVP[9]*v[2]+IVP[13])/w,
             (IVP[2]*v[0]+IVP[6]*v[1]+IVP[10]*v[2]+IVP[14])/w];};
   const A=un([nx,ny,-1,1]),B=un([nx,ny,1,1]);
-  let d=[B[0]-A[0],B[1]-A[1],B[2]-A[2]];
-  const dl=Math.hypot(d[0],d[1],d[2])||1;d=[d[0]/dl,d[1]/dl,d[2]/dl];
-  let best=1e18,bp=null;
-  /* 拾取要跟随当前显示的表面：重建表面模式下对 SurfaceNets 顶点求交，
-     否则对物理网格的可见面求交。                                        */
-  const useSurf=(CFG.surfMode!==0)&&surfIN>0;
-  const nTri=useSurf?surfIN/3:faceN*2;
-  let V0,V1,V2;
-  for(let ti=0;ti<nTri;ti++){
-    if(useSurf){
-      const a=surfIdx[ti*3],b=surfIdx[ti*3+1],c=surfIdx[ti*3+2];
-      V0=[SF.vx[a*3],SF.vx[a*3+1],SF.vx[a*3+2]];
-      V1=[SF.vx[b*3],SF.vx[b*3+1],SF.vx[b*3+2]];
-      V2=[SF.vx[c*3],SF.vx[c*3+1],SF.vx[c*3+2]];
-    }else{
-      const f=ti>>1, q=[faceQ[4*f],faceQ[4*f+1],faceQ[4*f+2],faceQ[4*f+3]];
-      const it=(ti&1)?[0,2,3]:[0,1,2];
-      const p0=q[it[0]]*3,p1=q[it[1]]*3,p2=q[it[2]]*3;
-      V0=[pos[p0],pos[p0+1],pos[p0+2]];
-      V1=[pos[p1],pos[p1+1],pos[p1+2]];
-      V2=[pos[p2],pos[p2+1],pos[p2+2]];
-    }
-    {
-      const v0=V0,v1=V1,v2=V2;
-      const e1=[v1[0]-v0[0],v1[1]-v0[1],v1[2]-v0[2]],e2=[v2[0]-v0[0],v2[1]-v0[1],v2[2]-v0[2]];
-      const h=[d[1]*e2[2]-d[2]*e2[1],d[2]*e2[0]-d[0]*e2[2],d[0]*e2[1]-d[1]*e2[0]];
-      const a=e1[0]*h[0]+e1[1]*h[1]+e1[2]*h[2];
-      if(Math.abs(a)<1e-9)continue;
-      const fi=1/a,s=[A[0]-v0[0],A[1]-v0[1],A[2]-v0[2]];
-      const u=fi*(s[0]*h[0]+s[1]*h[1]+s[2]*h[2]);
-      if(u<0||u>1)continue;
-      const qv=[s[1]*e1[2]-s[2]*e1[1],s[2]*e1[0]-s[0]*e1[2],s[0]*e1[1]-s[1]*e1[0]];
-      const v=fi*(d[0]*qv[0]+d[1]*qv[1]+d[2]*qv[2]);
-      if(v<0||u+v>1)continue;
-      const t=fi*(e2[0]*qv[0]+e2[1]*qv[1]+e2[2]*qv[2]);
-      if(t>1e-4&&t<best){best=t;bp=[A[0]+d[0]*t,A[1]+d[1]*t,A[2]+d[2]*t];}
-    }
-  }
-  if(bp){hammer.hx=bp[0];hammer.hz=bp[2];return;}
-  const t=(CFG.Ly*0.5-A[1])/(Math.abs(d[1])<1e-6?1e-6:d[1]);
-  if(t>0){hammer.hx=clamp(A[0]+d[0]*t,-CFG.Lx,CFG.Lx);hammer.hz=clamp(A[2]+d[2]*t,-CFG.Lz,CFG.Lz);}
+  const d=[B[0]-A[0],B[1]-A[1],B[2]-A[2]];
+  if(Math.abs(d[1])<1e-6)return null;       /* 视线近乎平行于砧面 */
+  const t=(0-A[1])/d[1];
+  return [A[0]+d[0]*t,0,A[2]+d[2]*t];
 }
 
 /* ==========================================================================
@@ -1730,9 +1765,9 @@ function frame(now){
       }else{
         auto.wait-=dtReal;
         if(auto.wait<=0){
-          if(auto.mode==='draw')hammer.hx=-CFG.Lx*0.36+(auto.i%9)*(CFG.Lx*0.72/8);
-          else hammer.hx=0;
-          hammer.hz=0; doStrike(); auto.n--; auto.i++; auto.wait=0.42;
+          if(auto.mode==='draw')movePieceTo(CFG.Lx*0.36-(auto.i%9)*(CFG.Lx*0.72/8),0);
+          else movePieceTo(0,0);
+          doStrike(); auto.n--; auto.i++; auto.wait=0.42;
           if(auto.n<=0)auto=null;
         }
       }
@@ -1801,6 +1836,16 @@ function buildPanel(){
   mkBtn(r,'停止',()=>{auto=null;showcase=null;});
   r=mkRow(s);mkBtn(r,'▶ 一键演示',()=>startShowcase(),true);
   r=mkRow(s);mkBtn(r,'重置 (R)',()=>buildAll());
+  r=mkRow(s);
+  mkBtn(r,'偏航-15°',()=>rotatePiece('y',-0.2618));
+  mkBtn(r,'偏航+15°',()=>rotatePiece('y', 0.2618));
+  mkBtn(r,'翻面 (E)',()=>flipPiece());
+  mkBtn(r,'回中',()=>movePieceTo(0,0));
+  r=mkRow(s);
+  mkBtn(r,'俯仰+10°',()=>rotatePiece('x', 0.1745));
+  mkBtn(r,'俯仰-10°',()=>rotatePiece('x',-0.1745));
+  mkBtn(r,'侧倾+10°',()=>rotatePiece('z', 0.1745));
+  mkBtn(r,'侧倾-10°',()=>rotatePiece('z',-0.1745));
   r=mkRow(s);
   /* 冲击测试：同一套动力学、同一个 F=3σy_eff·A·bear，只是不计数、出报告。
      用途是量「锻完的件抗不抗打」——锻合不良（分层/未融合）的件 bear 低，
@@ -1929,7 +1974,9 @@ function buildPanel(){
   mkSel('边着色',[['轴向应力',0],['损伤',1]],()=>CFG.edgeMode,x=>CFG.edgeMode=x);
 
   const note=document.createElement('div');note.className='note';
-  note.innerHTML='点击工件表面 = 移动锤头。「松弛」= 无载荷继续迭代，'+
+  note.innerHTML='锤头固定在砧面中心，靠移动/旋转铁块把要锻的部位送到锤下：'+
+   '←→↑↓ 移动 · Z/X 偏航 · W/S 俯仰 · A/D 侧倾 · E 翻面（中键拖也可移动）。'+
+   '料可以斜着放、架在棱上锻——每次旋转后自动落回砧面。「松弛」= 无载荷继续迭代，'+
    '看残余应力与形状是否收敛。<br>把「冷却倍率」拉到 0 再连打，可以观察绝热升温。';
   C.appendChild(note);
 }
@@ -1942,6 +1989,18 @@ window.addEventListener('keydown',e=>{
   else if(e.key==='q'||e.key==='Q')quenchT=2.6;
   else if(e.key==='f'||e.key==='F'){CFG.furnaceOn=!CFG.furnaceOn;
     const c=document.querySelectorAll('#controls input[type=checkbox]');if(c[0])c[0].checked=CFG.furnaceOn;}
+  /* 工件姿态（锤子固定）：←→↑↓ 移动 · Z/X 偏航 · W/S 俯仰 · A/D 侧倾 · E 翻面 */
+  else if(e.key==='ArrowLeft'){e.preventDefault();movePiece(-5,0);}
+  else if(e.key==='ArrowRight'){e.preventDefault();movePiece(5,0);}
+  else if(e.key==='ArrowUp'){e.preventDefault();movePiece(0,-5);}
+  else if(e.key==='ArrowDown'){e.preventDefault();movePiece(0,5);}
+  else if(e.key==='z'||e.key==='Z')rotatePiece('y',-0.2618);   /* 偏航 -15° */
+  else if(e.key==='x'||e.key==='X')rotatePiece('y', 0.2618);   /* 偏航 +15° */
+  else if(e.key==='w'||e.key==='W')rotatePiece('x', 0.1745);   /* 俯仰：前端下压 */
+  else if(e.key==='s'||e.key==='S')rotatePiece('x',-0.1745);   /* 俯仰：后端下压 */
+  else if(e.key==='a'||e.key==='A')rotatePiece('z', 0.1745);   /* 侧倾：左端下压 */
+  else if(e.key==='d'||e.key==='D')rotatePiece('z',-0.1745);   /* 侧倾：右端下压 */
+  else if(e.key==='e'||e.key==='E')flipPiece();
 });
 
 /* ==========================================================================
